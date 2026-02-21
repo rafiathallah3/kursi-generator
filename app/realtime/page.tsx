@@ -116,7 +116,7 @@ export default function RealtimeDataPage() {
     };
 
     const copyScript = () => {
-        const script = `fetch('https://superaverage-deloise-addictedly.ngrok-free.dev/api/process-html?room=${activeRoom}', {
+        const script = `fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ export default function RealtimeDataPage() {
                                 <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Script Ujian (Copy & Paste ke Console Moodle):</span>
                                 <div className="relative group bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 pr-10">
                                     <pre className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-mono whitespace-pre-wrap break-all h-28 overflow-y-auto custom-scrollbar select-all">
-                                        {`fetch('https://superaverage-deloise-addictedly.ngrok-free.dev/api/process-html?room=${activeRoom}', {
+                                        {`fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
