@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { getSheetIds, getSheetData, StudentData } from "./actions";
+import { motion, AnimatePresence } from "framer-motion";
+import { flushSync } from "react-dom";
 
 // Helper function to shuffle array
 function shuffleArray<T>(array: T[]): T[] {
@@ -154,6 +156,10 @@ export default function Home() {
 		return chunks;
 	}, [seats]);
 
+	const toggleTheme = () => {
+		setTheme(theme === "dark" ? "light" : "dark");
+	};
+
 	return (
 		<div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 font-sans text-sm text-zinc-900 overflow-hidden transition-colors duration-200">
 
@@ -164,7 +170,7 @@ export default function Home() {
 			>
 				<div className="p-6 flex flex-col gap-6 h-full overflow-y-auto w-64">
 					<div className="flex items-center justify-between">
-						<h2 className="font-semibold text-zinc-700 dark:text-zinc-300 uppercase text-xs tracking-wider">Isi datanya:</h2>
+						<h2 className="font-semibold text-zinc-700 dark:text-zinc-300 uppercase text-xs tracking-wider">Made by Rafi ATHALLAH</h2>
 						<button
 							onClick={() => setIsSidebarOpen(false)}
 							className="md:hidden p-1 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -254,6 +260,13 @@ export default function Home() {
 					</div>
 
 					<div className="flex items-center gap-2">
+						<a
+							href="/realtime"
+							target="_blank"
+							className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
+						>
+							Setup Ujian
+						</a>
 						<button
 							onClick={performShuffle}
 							className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
@@ -261,7 +274,7 @@ export default function Home() {
 							Ganti Tempat Duduk
 						</button>
 						<button
-							onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+							onClick={toggleTheme}
 							className="p-2 rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
 							aria-label="Toggle Theme"
 						>
@@ -290,7 +303,7 @@ export default function Home() {
 								{tables.map((table, tIndex) => (
 									<div key={tIndex} className="flex-1 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col min-w-0">
 										<div className="flex-1">
-											<table className="w-full text-left text-sm whitespace-normal h-full">
+											<table className="w-full text-left text-sm whitespace-normal">
 												<thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
 													<tr>
 														<th className="py-3 px-2 text-zinc-500 dark:text-zinc-400 font-medium w-8 border-r border-zinc-200 dark:border-zinc-800 text-center text-xs uppercase tracking-wider">NO</th>
@@ -301,16 +314,53 @@ export default function Home() {
 												<tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
 													{table.map((row) => {
 														const isError = !row.isAvailable;
+														const studentName = row.student ? (row.student["NIM"] || row.student["Nama"] || row.student["Name"] || "") : "";
+														const studentAsprak = row.student ? (row.student["ASPRAK"] || row.student["Asprak"] || "") : "";
+
 														return (
 															<tr key={row.seatNumber} className={`h-[48px] 2xl:h-[60px] transition-colors ${isError ? 'bg-red-500 dark:bg-red-600' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}>
 																<td className={`py-2 px-2 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-medium ${isError ? 'text-transparent' : 'text-zinc-500 dark:text-zinc-400'}`}>
 																	{row.seatNumber}
 																</td>
-																<td className={`py-2 px-3 border-r border-zinc-100 dark:border-zinc-800/80 font-medium text-xs sm:text-sm leading-tight ${isError ? 'text-transparent' : 'text-zinc-800 dark:text-zinc-200'}`} title={row.student ? (row.student["NIM"] || row.student["Nama"] || row.student["Name"] || "") : ""}>
-																	<div className="line-clamp-2">{row.student ? (row.student["NIM"] || row.student["Nama"] || row.student["Name"] || "") : ""}</div>
+																<td className={`py-2 px-3 border-r border-zinc-100 dark:border-zinc-800/80 font-medium text-xs sm:text-sm leading-tight ${isError ? 'text-transparent' : 'text-zinc-800 dark:text-zinc-200'} overflow-hidden`} title={studentName}>
+																	{!isError && (
+																		<div className="relative w-full h-full flex flex-col justify-center min-h-[30px] overflow-hidden">
+																			<AnimatePresence mode="popLayout" initial={false}>
+																				{studentName ? (
+																					<motion.div
+																						key={studentName}
+																						initial={{ opacity: 0, y: -20, filter: "blur(2px)" }}
+																						animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+																						exit={{ opacity: 0, y: 20, filter: "blur(2px)" }}
+																						transition={{ type: "spring", stiffness: 300, damping: 25 }}
+																						className="absolute line-clamp-2 w-full"
+																					>
+																						{studentName}
+																					</motion.div>
+																				) : null}
+																			</AnimatePresence>
+																		</div>
+																	)}
 																</td>
-																<td className={`py-2 px-2 text-center text-xs sm:text-sm ${isError ? 'text-transparent' : 'text-zinc-600 dark:text-zinc-400'} font-medium`}>
-																	{row.student ? (row.student["ASPRAK"] || row.student["Asprak"] || "") : ""}
+																<td className={`py-2 px-2 text-center text-xs sm:text-sm ${isError ? 'text-transparent' : 'text-zinc-600 dark:text-zinc-400'} font-medium overflow-hidden`}>
+																	{!isError && (
+																		<div className="relative w-full h-full flex flex-col items-center justify-center min-h-[30px] overflow-hidden">
+																			<AnimatePresence mode="popLayout" initial={false}>
+																				{studentAsprak ? (
+																					<motion.div
+																						key={studentName + studentAsprak}
+																						initial={{ opacity: 0, scale: 0.5 }}
+																						animate={{ opacity: 1, scale: 1 }}
+																						exit={{ opacity: 0, scale: 0.5 }}
+																						transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.05 }}
+																						className="absolute inset-0 flex items-center justify-center"
+																					>
+																						{studentAsprak}
+																					</motion.div>
+																				) : null}
+																			</AnimatePresence>
+																		</div>
+																	)}
 																</td>
 															</tr>
 														)
