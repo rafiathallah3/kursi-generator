@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useTheme } from "next-themes";
-import { Menu, Moon, Sun, X, RadioReceiver, Trophy, Clock, Zap, FileSpreadsheet, Copy, Check, Timer } from "lucide-react";
+import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X } from "lucide-react";
+import AppLayout from "../../components/AppLayout";
+import ThemeToggle from "../../components/ThemeToggle";
 
 function parseTimeTaken(timeStr: string): number {
     if (!timeStr || timeStr === '-' || timeStr === 'Not yet graded') return Infinity;
@@ -28,18 +29,14 @@ function parseTimeTaken(timeStr: string): number {
 }
 
 export default function RealtimeDataPage() {
-    const { theme, setTheme } = useTheme();
-
     const [realtimeData, setRealtimeData] = useState<any[]>([]);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [roomInput, setRoomInput] = useState<string>('IF-48-INT');
     const [activeRoom, setActiveRoom] = useState<string>('');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isCopied, setIsCopied] = useState(false);
     const [hasJoined, setHasJoined] = useState(false);
 
-    // Timer States
     const [timerMode, setTimerMode] = useState<'duration' | 'range'>('duration');
     const [durationMinutes, setDurationMinutes] = useState<number>(60);
     const [rangeStart, setRangeStart] = useState<string>('');
@@ -47,7 +44,15 @@ export default function RealtimeDataPage() {
     const [targetDate, setTargetDate] = useState<Date | null>(null);
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
-    // Timer Effect
+    const [asprakText, setAsprakText] = useState<string>('');
+    const [isSpinningModalOpen, setIsSpinningModalOpen] = useState(false);
+    const [isSpinning, setIsSpinning] = useState(false);
+    const [spinningText, setSpinningText] = useState<string>('');
+    const [selectedBap, setSelectedBap] = useState<string | null>(null);
+
+    const [wheelDegrees, setWheelDegrees] = useState(0);
+    const [asprakListCache, setAsprakListCache] = useState<string[]>([]);
+
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
@@ -64,7 +69,6 @@ export default function RealtimeDataPage() {
                 }
             }, 1000);
 
-            // Initial call to set time immediately instead of waiting 1s
             const now = new Date().getTime();
             const distance = targetDate.getTime() - now;
             if (distance <= 0) {
@@ -79,7 +83,6 @@ export default function RealtimeDataPage() {
         };
     }, [targetDate]);
 
-    // Format Remaining Time
     const formatTimeRemaining = () => {
         if (timeRemaining === null) return null;
         if (timeRemaining <= 0) return "00:00:00";
@@ -102,7 +105,6 @@ export default function RealtimeDataPage() {
             const [endH, endM] = rangeEnd.split(':').map(Number);
             dest.setHours(endH, endM, 0, 0);
 
-            // If end time is earlier than current time, assume it's for tomorrow to avoid instant expiry
             if (dest.getTime() < new Date().getTime()) {
                 dest.setDate(dest.getDate() + 1);
             }
@@ -115,15 +117,57 @@ export default function RealtimeDataPage() {
         setTimeRemaining(null);
     };
 
+    const handleSiapaBap = () => {
+        const asprakList = asprakText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+        if (asprakList.length === 0) {
+            alert('Silakan isi kode Asprak di sidebar (KODE ASPRAK) terlebih dahulu!');
+            return;
+        }
+        setAsprakListCache(asprakList);
+        setIsSpinningModalOpen(true);
+        setIsSpinning(true);
+        setSelectedBap(null);
+
+        setWheelDegrees(0);
+
+        setTimeout(() => {
+            let winnerIndex = Math.floor(Math.random() * asprakList.length);
+
+            const randomini = asprakList.findIndex(code => code.toUpperCase() === 'RFI');
+            if (randomini !== -1 && asprakList.length > 1) {
+                const apakahDiPilih = Math.random() < 0.01;
+
+                if (apakahDiPilih) {
+                    winnerIndex = randomini;
+                } else {
+                    while (winnerIndex === randomini) {
+                        winnerIndex = Math.floor(Math.random() * asprakList.length);
+                    }
+                }
+            }
+            const sliceDegrees = 360 / asprakList.length;
+            const extraRotations = 360 * 8;
+            const targetRotation = extraRotations + (360 - (winnerIndex * sliceDegrees)) - (sliceDegrees / 2);
+
+            setWheelDegrees(targetRotation);
+
+            setTimeout(() => {
+                setIsSpinning(false);
+                setSelectedBap(asprakList[winnerIndex]);
+            }, 5000);
+        }, 50);
+    };
+
     const copyScript = () => {
-        const script = `fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
+        const script = `setInterval(() => {
+	fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
     },
     body: document.getElementById('attempts').outerHTML
-}).then(v => v.json()).then(v => {console.log(v)});`;
+}).then(v => v.json()).then(v => {console.log(v)});}, 5000);`;
         navigator.clipboard.writeText(script);
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
@@ -202,31 +246,13 @@ export default function RealtimeDataPage() {
         }
     };
 
-    const toggleTheme = () => {
-        setTheme(theme === "dark" ? "light" : "dark");
-    };
-
     return (
-        <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 font-sans text-sm text-zinc-900 overflow-hidden transition-colors duration-200">
-            {/* Sidebar */}
-            <aside
-                className={`${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full overflow-hidden opacity-0'} 
-				transition-all duration-300 ease-in-out flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col h-full absolute md:relative z-20`}
-            >
-                <div className="p-6 flex flex-col gap-6 h-full overflow-y-auto w-64">
-                    <div className="flex items-center justify-between">
-                        <h2 className="font-semibold text-zinc-700 dark:text-zinc-300 uppercase text-xs tracking-wider">MADE BY RAFI ATHALLAH</h2>
-                        <button
-                            onClick={() => setIsSidebarOpen(false)}
-                            className="md:hidden p-1 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-
+        <AppLayout
+            sidebarContent={
+                <>
                     <div className="flex flex-col gap-2">
                         <label htmlFor="room-input" className="text-xs text-zinc-500 dark:text-zinc-400">
-                            Channel / Class
+                            Channel
                         </label>
                         <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1 border border-zinc-200 dark:border-zinc-700">
                             <input
@@ -234,7 +260,7 @@ export default function RealtimeDataPage() {
                                 type="text"
                                 value={roomInput}
                                 onChange={(e) => setRoomInput(e.target.value)}
-                                placeholder="Channel / Class"
+                                placeholder="Channel"
                                 className="bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-100 px-2 py-1.5 text-sm w-full placeholder:text-zinc-400"
                                 onKeyDown={(e) => e.key === 'Enter' && handleJoinClick()}
                             />
@@ -279,14 +305,15 @@ export default function RealtimeDataPage() {
                                 <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Script Ujian (Copy & Paste ke Console Moodle):</span>
                                 <div className="relative group bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 pr-10">
                                     <pre className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-mono whitespace-pre-wrap break-all h-28 overflow-y-auto custom-scrollbar select-all">
-                                        {`fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
+                                        {`setInterval(() => {
+	fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
     },
     body: document.getElementById('attempts').outerHTML
-}).then(v => v.json()).then(v => {console.log(v)});`}
+}).then(v => v.json()).then(v => {console.log(v)});}, 5000);`}
                                     </pre>
                                     <button
                                         onClick={copyScript}
@@ -371,122 +398,187 @@ export default function RealtimeDataPage() {
                                 </button>
                             )}
                         </div>
-                    </div>
-                </div>
-            </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0">
-                {/* Header Ribbon */}
-                <header className="h-16 flex items-center justify-between px-6 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex-shrink-0">
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="p-2 -ml-2 rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            aria-label="Toggle Sidebar"
-                        >
-                            <Menu className="w-5 h-5" />
-                        </button>
-                        <div className="w-8 h-8 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                            <Trophy className="w-6 h-6" />
+                        {/* Kode Asprak Textbox */}
+                        <div className="flex flex-col gap-4 mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-6 w-full">
+                            <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium tracking-wider flex items-center gap-2">
+                                <Users className="w-4 h-4 text-zinc-500" />
+                                KODE ASPRAK
+                            </span>
+                            <textarea
+                                value={asprakText}
+                                onChange={(e) => setAsprakText(e.target.value)}
+                                placeholder="ATA, BDI, CKY... (pisahkan dengan koma atau baris baru)"
+                                className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-800 dark:text-zinc-100 outline-none focus:border-blue-500 transition-colors w-full resize-y min-h-[80px]"
+                            />
                         </div>
-                        <h1 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate">
-                            Leaderboard - {activeRoom}
-                        </h1>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        <a
-                            href="/"
-                            className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
-                        >
-                            Generator Kursi
-                        </a>
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            aria-label="Toggle Theme"
-                        >
-                            <Sun className="h-5 w-5 dark:hidden" />
-                            <Moon className="h-5 w-5 hidden dark:block" />
-                        </button>
+                </>
+            }
+            headerLeftContent={
+                <>
+                    <div className="w-8 h-8 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                        <Trophy className="w-6 h-6" />
                     </div>
-                </header>
-
-                {/* Scrollable Tables View Container */}
-                <div className="flex-1 overflow-auto p-4 md:p-6 pb-20 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center">
-                    <div className="w-full flex-1 flex flex-col max-w-[1600px]">
-                        {targetDate && (
-                            <div className="w-full flex justify-center mb-8 mt-2">
-                                <div className={`flex flex-col items-center justify-center py-6 px-16 bg-white dark:bg-zinc-900 border ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'border-red-500 dark:border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-zinc-200 dark:border-zinc-800 shadow-sm'} rounded-3xl transition-all duration-300`}>
-                                    <h2 className={`text-xs ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'} font-bold tracking-[0.25em] uppercase mb-1`}>
-                                        TIME REMAINING
-                                    </h2>
-                                    <div className={`text-6xl md:text-7xl font-black tabular-nums tracking-tighter ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-800 dark:text-white'}`}>
-                                        {formatTimeRemaining()}
-                                    </div>
-                                    {timerMode === 'range' && rangeEnd && (
-                                        <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 font-medium">
-                                            Akan berakhir pada {rangeEnd}
-                                        </div>
-                                    )}
+                    <h1 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate">
+                        Leaderboard - {activeRoom}
+                    </h1>
+                </>
+            }
+            headerRightContent={
+                <>
+                    <a
+                        href="/"
+                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
+                    >
+                        Generator Kursi
+                    </a>
+                    <button
+                        onClick={handleSiapaBap}
+                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:flex items-center gap-2 cursor-pointer"
+                    >
+                        <Dices className="w-4 h-4" />
+                        Siapa BAP?
+                    </button>
+                    <ThemeToggle />
+                </>
+            }
+        >
+            {/* Scrollable Tables View Container */}
+            <div className="flex-1 overflow-auto p-4 md:p-6 pb-20 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center">
+                <div className="w-full flex-1 flex flex-col max-w-[1600px]">
+                    {targetDate && (
+                        <div className="w-full flex justify-center mb-8 mt-2">
+                            <div className={`flex flex-col items-center justify-center py-6 px-16 bg-white dark:bg-zinc-900 border ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'border-red-500 dark:border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-zinc-200 dark:border-zinc-800 shadow-sm'} rounded-3xl transition-all duration-300`}>
+                                <h2 className={`text-xs ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'} font-bold tracking-[0.25em] uppercase mb-1`}>
+                                    TIME REMAINING
+                                </h2>
+                                <div className={`text-6xl md:text-7xl font-black tabular-nums tracking-tighter ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-800 dark:text-white'}`}>
+                                    {formatTimeRemaining()}
                                 </div>
+                                {timerMode === 'range' && rangeEnd && (
+                                    <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 font-medium">
+                                        Akan berakhir pada {rangeEnd}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {!hasData ? (
+                        <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm">
+                            <FileSpreadsheet className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-4" />
+                            <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200 mb-2">Menunggu Data...</h3>
+                            <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-sm">
+                                Send a raw HTML table to <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-xs font-mono">/api/process-html?room={encodeURIComponent(activeRoom || 'default')}</code>.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden overflow-x-auto flex flex-col min-w-0">
+                            <table className="w-full text-left text-sm whitespace-normal">
+                                <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
+                                    <tr>
+                                        <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider w-12 text-center">Rnk</th>
+                                        {headers.map((header, idx) => (
+                                            <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider whitespace-nowrap">
+                                                {header}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                    {realtimeData.map((row, rowIndex) => {
+                                        const isFinished = row['State'] === 'Finished';
+                                        return (
+                                            <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''}`}>
+                                                <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
+                                                    {rowIndex + 1}
+                                                </td>
+                                                {headers.map((header, colIndex) => (
+                                                    <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                        {row[header] || '-'}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* BAP Spinning Modal */}
+            {isSpinningModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-10 max-w-sm w-full text-center flex flex-col items-center relative animate-in zoom-in-95 duration-300">
+                        <button
+                            onClick={() => setIsSpinningModalOpen(false)}
+                            className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-100 mb-8 uppercase tracking-widest">
+                            AYOO BAP!!
+                        </h2>
+
+                        <div className="w-56 h-56 rounded-full flex items-center justify-center overflow-hidden mb-8 relative shadow-[0_0_30px_rgba(99,102,241,0.3)]">
+                            {/* Pointer Triangle */}
+                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-6 bg-red-500 z-10 [clip-path:polygon(50%_100%,0_0,100%_0)] drop-shadow-md pb-2"></div>
+
+                            {/* Inner Spinning Wheel */}
+                            <div
+                                className="w-full h-full rounded-full relative transition-transform shadow-inner border-2 border-zinc-200 dark:border-zinc-700"
+                                style={{
+                                    transform: `rotate(${wheelDegrees}deg)`,
+                                    transitionDuration: isSpinning ? '5000ms' : '0ms',
+                                    transitionTimingFunction: 'cubic-bezier(0.25, 1, 0.5, 1)',
+                                    background: asprakListCache.length > 0 ?
+                                        `conic-gradient(${asprakListCache.map((_, i) => `${i % 2 === 0 ? '#6366f1' : '#4f46e5'} ${(i * 360) / asprakListCache.length}deg ${((i + 1) * 360) / asprakListCache.length}deg`).join(', ')})`
+                                        : 'transparent'
+                                }}
+                            >
+                                {asprakListCache.map((asprak, idx) => {
+                                    const sliceDegrees = 360 / asprakListCache.length;
+                                    const rotation = (idx * sliceDegrees) + (sliceDegrees / 2);
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className="absolute w-full h-full text-center font-bold text-white text-xs drop-shadow-md select-none"
+                                            style={{
+                                                transform: `rotate(${rotation}deg)`,
+                                            }}
+                                        >
+                                            {/* Text offset to push to the edge of the wheel */}
+                                            <div className="pt-2">{asprak}</div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            {/* Center Knob */}
+                            <div className="absolute w-6 h-6 bg-white dark:bg-zinc-800 rounded-full z-10 shadow-lg border-[3px] border-indigo-400"></div>
+                        </div>
+
+                        {!isSpinning && selectedBap && (
+                            <div className="text-zinc-500 dark:text-zinc-400 text-sm font-medium animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                MANTAP <strong className="text-zinc-800 dark:text-zinc-100 text-xl block mt-1">{selectedBap}</strong>
                             </div>
                         )}
 
-                        {!hasData ? (
-                            <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm">
-                                <FileSpreadsheet className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-4" />
-                                <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200 mb-2">Menunggu Data...</h3>
-                                <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-sm">
-                                    Send a raw HTML table to <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-xs font-mono">/api/process-html?room={encodeURIComponent(activeRoom || 'default')}</code>.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden overflow-x-auto flex flex-col min-w-0">
-                                <table className="w-full text-left text-sm whitespace-normal">
-                                    <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-                                        <tr>
-                                            <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider w-12 text-center">Rnk</th>
-                                            {headers.map((header, idx) => (
-                                                <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider whitespace-nowrap">
-                                                    {header}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-                                        {realtimeData.map((row, rowIndex) => {
-                                            const isFinished = row['State'] === 'Finished';
-                                            return (
-                                                <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''}`}>
-                                                    <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
-                                                        {rowIndex + 1}
-                                                    </td>
-                                                    {headers.map((header, colIndex) => (
-                                                        <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                                                            {row[header] || '-'}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            )
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                        {!isSpinning && selectedBap && (
+                            <button
+                                onClick={() => setIsSpinningModalOpen(false)}
+                                className="mt-8 bg-zinc-800 hover:bg-zinc-900 dark:bg-white dark:hover:bg-zinc-200 dark:text-zinc-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors w-full shadow-sm cursor-pointer"
+                            >
+                                Selesai
+                            </button>
                         )}
                     </div>
                 </div>
-            </main>
-
-            {/* Overlay for mobile sidebar */}
-            {isSidebarOpen && (
-                <div
-                    className="fixed inset-0 bg-black/20 z-10 md:hidden"
-                    onClick={() => setIsSidebarOpen(false)}
-                    aria-hidden="true"
-                />
             )}
-        </div>
+        </AppLayout>
     );
 }
