@@ -5,6 +5,8 @@ import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X } f
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
 
+const API_BASE = process.env.NEXT_PUBLIC_URL_LINK || "http://localhost:3000";
+
 function parseTimeTaken(timeStr: string): number {
     if (!timeStr || timeStr === '-' || timeStr === 'Not yet graded') return Infinity;
 
@@ -159,15 +161,50 @@ export default function RealtimeDataPage() {
     };
 
     const copyScript = () => {
-        const script = `setInterval(() => {
-	fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
-    },
-    body: document.getElementById('attempts').outerHTML
-}).then(v => v.json()).then(v => {console.log(v)});}, 5000);`;
+        const script = `
+(async function () {
+  const API_BASE = "${API_BASE}";
+  const ROOM = "${activeRoom}";
+
+  async function sendAttemptsHTML() {
+    try {
+      const response = await fetch(window.location.href);
+      const html = await response.text();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const attemptsElement = doc.getElementById("attempts");
+
+      if (!attemptsElement) {
+        console.warn("#attempts not found");
+        return;
+      }
+
+      const apiResponse = await fetch(
+        \`\${API_BASE}/api/process-html?room=\${ROOM}\`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify({
+            html: attemptsElement.outerHTML
+          })
+        }
+      );
+
+      const result = await apiResponse.json();
+      console.log("API response:", result);
+
+    } catch (err) {
+      console.error("Script error:", err);
+    }
+  }
+
+  setInterval(sendAttemptsHTML, 5000);
+})();
+`;
         navigator.clipboard.writeText(script);
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
@@ -305,15 +342,50 @@ export default function RealtimeDataPage() {
                                 <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Script Ujian (Copy & Paste ke Console Moodle):</span>
                                 <div className="relative group bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 pr-10">
                                     <pre className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-mono whitespace-pre-wrap break-all h-28 overflow-y-auto custom-scrollbar select-all">
-                                        {`setInterval(() => {
-	fetch('${process.env.NEXT_PUBLIC_URL_LINK || 'http://localhost:3000'}/api/process-html?room=${activeRoom}', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
-    },
-    body: document.getElementById('attempts').outerHTML
-}).then(v => v.json()).then(v => {console.log(v)});}, 5000);`}
+                                        {`
+(async function () {
+  const API_BASE = "${API_BASE}";
+  const ROOM = "${activeRoom}";
+
+  async function sendAttemptsHTML() {
+    try {
+      const response = await fetch(window.location.href);
+      const html = await response.text();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const attemptsElement = doc.getElementById("attempts");
+
+      if (!attemptsElement) {
+        console.warn("#attempts not found");
+        return;
+      }
+
+      const apiResponse = await fetch(
+        \`\${API_BASE}/api/process-html?room=\${ROOM}\`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify({
+            html: attemptsElement.outerHTML
+          })
+        }
+      );
+
+      const result = await apiResponse.json();
+      console.log("API response:", result);
+
+    } catch (err) {
+      console.error("Script error:", err);
+    }
+  }
+
+  setInterval(sendAttemptsHTML, 5000);
+})();
+`}
                                     </pre>
                                     <button
                                         onClick={copyScript}
