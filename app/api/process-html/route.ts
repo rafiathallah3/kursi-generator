@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emitter } from '../emitter';
 
-const HEADER_TO_IGNORE = [
-    'Unknown_Col_0',
-    'Unknown_Col_1',
-    'ID number',
-    'Email address',
-    'Started on',
-    'Grade/100.00',
-    'Q. 1/99.01',
-    'Q. 2/0.99',
-    'Grade/10.00',
-    'Q. 1/9.90',
-    'Q. 2/0.10'
+const HEADER_INCLUDE = [
+    'NAME',
+    'NUMBER',
+    'STATE',
+    'STARTED',
+    'COMPLETED',
+    'TIME TAKEN'
 ]
 
 export async function OPTIONS() {
@@ -82,14 +77,23 @@ export async function POST(request: NextRequest) {
                     cellData = $(td).find('input[type="checkbox"]').val() as string;
                 }
 
-                if (HEADER_TO_IGNORE.includes(headerName)) {
+                let apakahAda = false;
+                let header = '';
+                for (let i = 0; i < HEADER_INCLUDE.length; i++) {
+                    if (headerName.toLowerCase().includes(HEADER_INCLUDE[i].toLowerCase())) {
+                        apakahAda = true;
+                        header = HEADER_INCLUDE[i];
+                        break;
+                    }
+                }
+                if (!apakahAda) {
                     return;
                 }
 
-                rowData[headerName] = cellData;
+                rowData[header] = cellData;
             });
 
-            const nameKey = Object.keys(rowData).find(key => key.includes('First name') || key.includes('Last name'));
+            const nameKey = Object.keys(rowData).find(key => key.includes('NAME'));
 
             if (nameKey) {
                 rowData[nameKey] = rowData[nameKey].replace(/Review attempt/i, '').replace(/Overall average/i, '').trim();
@@ -98,7 +102,9 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            data.push(rowData);
+            if (rowData['NAME']) {
+                data.push(rowData);
+            }
         });
 
         const url = new URL(request.url);

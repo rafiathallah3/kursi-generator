@@ -17,7 +17,7 @@ function parseTimeTaken(timeStr: string): number {
         totalMinutes += parseInt(hoursMatch[1]) * 60;
     }
 
-    const minsMatch = timeStr.match(/(\d+)\s*min/i);
+    const minsMatch = timeStr.match(/(\d+)\s*mins/i);
     if (minsMatch) {
         totalMinutes += parseInt(minsMatch[1]);
     }
@@ -211,7 +211,7 @@ export default function RealtimeDataPage() {
     };
 
     useEffect(() => {
-        document.title = "Setup Ujian - Leaderboard";
+        document.title = "Setup Praktikum - Leaderboard";
     }, []);
 
     useEffect(() => {
@@ -219,6 +219,8 @@ export default function RealtimeDataPage() {
         setRealtimeData([]);
         setLastUpdated(null);
         setIsConnected(false);
+
+        if (!activeRoom || !hasJoined) return;
 
         // Connect to our Next.js Server-Sent Events endpoint with the specific room
         const eventSource = new EventSource(`/api/stream?room=${encodeURIComponent(activeRoom || 'default')}`);
@@ -271,7 +273,7 @@ export default function RealtimeDataPage() {
         return () => {
             eventSource.close();
         };
-    }, [activeRoom]);
+    }, [activeRoom, hasJoined]);
 
     const hasData = realtimeData.length > 0;
     const headers = hasData ? Object.keys(realtimeData[0]) : [];
@@ -281,6 +283,11 @@ export default function RealtimeDataPage() {
             setActiveRoom(roomInput);
             setHasJoined(true);
         }
+    };
+
+    const handleStopListeningClick = () => {
+        setHasJoined(false);
+        setIsConnected(false);
     };
 
     return (
@@ -302,13 +309,22 @@ export default function RealtimeDataPage() {
                                 onKeyDown={(e) => e.key === 'Enter' && handleJoinClick()}
                             />
                         </div>
-                        <button
-                            onClick={handleJoinClick}
-                            disabled={!roomInput || (roomInput === activeRoom && hasJoined)}
-                            className="w-full mt-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 px-4 py-2.5 rounded-lg text-sm text-white font-medium transition-colors shadow-sm"
-                        >
-                            Listen
-                        </button>
+                        {hasJoined && roomInput === activeRoom ? (
+                            <button
+                                onClick={handleStopListeningClick}
+                                className="w-full mt-2 bg-red-500 hover:bg-red-600 px-4 py-2.5 rounded-lg text-sm text-white font-medium transition-colors shadow-sm"
+                            >
+                                Stop Listening
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleJoinClick}
+                                disabled={!roomInput}
+                                className="w-full mt-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 px-4 py-2.5 rounded-lg text-sm text-white font-medium transition-colors shadow-sm"
+                            >
+                                Listen
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex flex-col gap-4 mt-2">
@@ -560,7 +576,7 @@ export default function RealtimeDataPage() {
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                                     {realtimeData.map((row, rowIndex) => {
-                                        const isFinished = row['State'] === 'Finished';
+                                        const isFinished = row['STATE'] === 'Finished';
                                         return (
                                             <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''}`}>
                                                 <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">

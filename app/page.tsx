@@ -28,6 +28,19 @@ export default function Home() {
 
 	const [unavailableSeats, setUnavailableSeats] = useState<Set<number>>(new Set());
 	const [semesterText, setSemesterText] = useState("Genap 26/27");
+	const [excludedStudents, setExcludedStudents] = useState<Set<string>>(new Set());
+
+	const activeStudents = useMemo(() => {
+		if (!allData || !selectedClass) return [];
+		return allData.filter((row) => {
+			const cls = row["Kelas"] || row["Class"];
+			return cls && cls.trim() === selectedClass;
+		}).sort((a, b) => {
+			const nameA = a["NIM"];
+			const nameB = b["NIM"];
+			return nameA.localeCompare(nameB);
+		})
+	}, [allData, selectedClass]);
 
 	useEffect(() => {
 		const now = new Date();
@@ -98,20 +111,17 @@ export default function Home() {
 	}, [classes, selectedClass]);
 
 	const performShuffle = useCallback(() => {
-		if (!allData || !selectedClass) {
+		if (!activeStudents || activeStudents.length === 0) {
 			setShuffledStudents([]);
 			return;
 		}
-		const filtered = allData.filter((row) => {
-			const cls = row["Kelas"] || row["Class"];
-			return cls && cls.trim() === selectedClass;
-		});
-		setShuffledStudents(shuffleArray(filtered));
-	}, [allData, selectedClass]);
+		setShuffledStudents(shuffleArray(activeStudents));
+	}, [activeStudents]);
 
 	useEffect(() => {
+		setExcludedStudents(new Set());
 		performShuffle();
-	}, [performShuffle]);
+	}, [activeStudents, performShuffle]);
 
 
 	const toggleSeat = (seatNum: number) => {
@@ -131,12 +141,17 @@ export default function Home() {
 		const layout = [];
 		let studentIndex = 0;
 
+		const effectiveStudents = shuffledStudents.filter(student => {
+			const key = student["NIM"] || student["Nama"] || student["Name"];
+			return !excludedStudents.has(String(key));
+		});
+
 		for (let i = 1; i <= totalSeats; i++) {
 			if (unavailableSeats.has(i)) {
 				layout.push({ seatNumber: i, isAvailable: false, student: null });
 			} else {
-				if (studentIndex < shuffledStudents.length) {
-					layout.push({ seatNumber: i, isAvailable: true, student: shuffledStudents[studentIndex] });
+				if (studentIndex < effectiveStudents.length) {
+					layout.push({ seatNumber: i, isAvailable: true, student: effectiveStudents[studentIndex] });
 					studentIndex++;
 				} else {
 					layout.push({ seatNumber: i, isAvailable: true, student: null });
@@ -144,7 +159,7 @@ export default function Home() {
 			}
 		}
 		return layout;
-	}, [shuffledStudents, unavailableSeats]);
+	}, [shuffledStudents, unavailableSeats, excludedStudents]);
 
 	const tables = useMemo(() => {
 		const chunks = [];
@@ -212,6 +227,44 @@ export default function Home() {
 							))}
 						</div>
 					</div>
+
+					{activeStudents && activeStudents.length > 0 && (
+						<div className="flex flex-col gap-2 mt-4">
+							<span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Pilih nama yang tidak digunakan:</span>
+							<div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 dark:bg-zinc-900/50 scrollbar-thin">
+								{activeStudents.map((student, idx) => {
+									const name = student["Nama"] || student["Name"] || "";
+									const nim = student["NIM"] || "";
+									const key = String(nim || name || idx);
+									const isExcluded = excludedStudents.has(key);
+									const asprak = student["ASPRAK"] || student["Asprak"] || "";
+									return (
+										<label key={key} className="flex items-start gap-2 cursor-pointer group hover:bg-zinc-50 dark:hover:bg-zinc-800 p-1.5 rounded transition-colors">
+											<input
+												type="checkbox"
+												checked={isExcluded}
+												onChange={() => {
+													setExcludedStudents(prev => {
+														const newSet = new Set(prev);
+														if (newSet.has(key)) newSet.delete(key);
+														else newSet.add(key);
+														return newSet;
+													});
+												}}
+												className="mt-0.5 w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:checked:bg-blue-500 cursor-pointer flex-shrink-0"
+											/>
+											<div className="flex flex-col overflow-hidden">
+												<span className={`text-xs font-medium truncate ${isExcluded ? 'text-zinc-400 dark:text-zinc-500 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>{name}</span>
+												<span className={`text-[10px] truncate ${isExcluded ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400'}`}>
+													{nim ? `${nim}` : ''} {asprak ? `• ${asprak}` : ''}
+												</span>
+											</div>
+										</label>
+									);
+								})}
+							</div>
+						</div>
+					)}
 				</>
 			}
 			headerLeftContent={
@@ -233,7 +286,7 @@ export default function Home() {
 						target="_blank"
 						className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
 					>
-						Setup Ujian
+						Setup Praktikum
 					</a>
 					<button
 						onClick={performShuffle}
