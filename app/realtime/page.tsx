@@ -233,27 +233,22 @@ export default function RealtimeDataPage() {
             try {
                 const incomingData = JSON.parse(event.data);
 
-                // Set the newest incoming data batch
                 if (Array.isArray(incomingData)) {
-                    // Sort as a Leaderboard: 'Finished' first, then closest time taken
                     const sortedData = incomingData.sort((a, b) => {
-                        const stateA = a['State'] || '';
-                        const stateB = b['State'] || '';
+                        const stateA = a['STATE'] || '';
+                        const stateB = b['STATE'] || '';
 
-                        // Both Finished: Sort by Time Taken
                         if (stateA === 'Finished' && stateB === 'Finished') {
-                            const timeA = parseTimeTaken(a['Time taken'] || '');
-                            const timeB = parseTimeTaken(b['Time taken'] || '');
+                            const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
+                            const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
                             return timeA - timeB;
                         }
 
-                        // One Finished: It goes to the top
                         if (stateA === 'Finished' && stateB !== 'Finished') return -1;
                         if (stateA !== 'Finished' && stateB === 'Finished') return 1;
 
-                        // Neither Finished: Sort by Time Taken as well or leave as is
-                        const timeA = parseTimeTaken(a['Time taken'] || '');
-                        const timeB = parseTimeTaken(b['Time taken'] || '');
+                        const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
+                        const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
                         return timeA - timeB;
                     });
 
