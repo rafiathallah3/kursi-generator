@@ -213,7 +213,7 @@ export default function Home() {
 
 					<div className="flex flex-col gap-4 mt-2">
 						<span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Pilih nomor meja yang tidak bisa digunakan:</span>
-						<div className="grid grid-cols-5 gap-y-3 gap-x-2">
+						<div className="grid grid-cols-5 grid-flow-col grid-rows-[repeat(10,minmax(0,1fr))] gap-y-3 gap-x-2">
 							{Array.from({ length: 50 }, (_, i) => i + 1).map((num) => (
 								<label key={num} className="flex flex-col items-center gap-1 cursor-pointer group">
 									<input
