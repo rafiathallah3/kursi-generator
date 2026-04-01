@@ -45,6 +45,8 @@ export default function RealtimeDataPage() {
     const [rangeEnd, setRangeEnd] = useState<string>('');
     const [targetDate, setTargetDate] = useState<Date | null>(null);
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+    const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
+    const [hasShownWinnerModal, setHasShownWinnerModal] = useState(false);
 
     const [asprakText, setAsprakText] = useState<string>('');
     const [isSpinningModalOpen, setIsSpinningModalOpen] = useState(false);
@@ -66,6 +68,13 @@ export default function RealtimeDataPage() {
                 if (distance <= 0) {
                     setTimeRemaining(0);
                     clearInterval(interval);
+                    setHasShownWinnerModal(prev => {
+                        if (!prev) {
+                            setIsWinnerModalOpen(true);
+                            return true;
+                        }
+                        return prev;
+                    });
                 } else {
                     setTimeRemaining(Math.floor(distance / 1000));
                 }
@@ -75,6 +84,13 @@ export default function RealtimeDataPage() {
             const distance = targetDate.getTime() - now;
             if (distance <= 0) {
                 setTimeRemaining(0);
+                setHasShownWinnerModal(prev => {
+                    if (!prev) {
+                        setIsWinnerModalOpen(true);
+                        return true;
+                    }
+                    return prev;
+                });
             } else {
                 setTimeRemaining(Math.floor(distance / 1000));
             }
@@ -97,6 +113,7 @@ export default function RealtimeDataPage() {
     };
 
     const handleStartTimer = () => {
+        setHasShownWinnerModal(false);
         if (timerMode === 'duration') {
             const dest = new Date();
             dest.setMinutes(dest.getMinutes() + durationMinutes);
@@ -117,6 +134,22 @@ export default function RealtimeDataPage() {
     const handleStopTimer = () => {
         setTargetDate(null);
         setTimeRemaining(null);
+        setHasShownWinnerModal(false);
+    };
+
+    const getRowName = (row: any) => {
+        if (!row) return 'Unknown';
+        if (row['Name']) return row['Name'];
+        if (row['Nama']) return row['Nama'];
+        if (row['Full name']) return row['Full name'];
+        const first = row['First name'] || row['First Name'] || '';
+        const last = row['Last name'] || row['Surname'] || row['Last Name'] || '';
+        if (first || last) return `${first} ${last}`.trim();
+
+        const values = Object.values(row).filter(v => typeof v === 'string' && v.trim() !== '' && v !== '-' && v !== 'Finished' && v !== 'In progress' && v !== 'Not yet graded');
+        if (values.length > 0) return values[0] as string;
+
+        return 'Unknown';
     };
 
     const handleSiapaBap = () => {
@@ -289,6 +322,13 @@ export default function RealtimeDataPage() {
         <AppLayout
             sidebarContent={
                 <>
+                    <a
+                        href="/"
+                        className="w-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shadow-sm"
+                    >
+                        Generator Kursi
+                    </a>
+
                     <div className="flex flex-col gap-2">
                         <label htmlFor="room-input" className="text-xs text-zinc-500 dark:text-zinc-400">
                             Channel
@@ -494,6 +534,13 @@ export default function RealtimeDataPage() {
                                 placeholder="ATA, BDI, CKY... (pisahkan dengan koma atau baris baru)"
                                 className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-800 dark:text-zinc-100 outline-none focus:border-blue-500 transition-colors w-full resize-y min-h-[80px]"
                             />
+                            <button
+                                onClick={handleSiapaBap}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow-sm flex items-center justify-center gap-2"
+                            >
+                                <Dices className="w-4 h-4" />
+                                Siapa BAP?
+                            </button>
                         </div>
                     </div>
                 </>
@@ -510,19 +557,6 @@ export default function RealtimeDataPage() {
             }
             headerRightContent={
                 <>
-                    <a
-                        href="/"
-                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block"
-                    >
-                        Generator Kursi
-                    </a>
-                    <button
-                        onClick={handleSiapaBap}
-                        className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:flex items-center gap-2 cursor-pointer"
-                    >
-                        <Dices className="w-4 h-4" />
-                        Siapa BAP?
-                    </button>
                     <ThemeToggle />
                 </>
             }
@@ -573,7 +607,7 @@ export default function RealtimeDataPage() {
                                     {realtimeData.map((row, rowIndex) => {
                                         const isFinished = row['STATE'] === 'Finished';
                                         return (
-                                            <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''}`}>
+                                            <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-100 dark:bg-emerald-900/10' : ''}`}>
                                                 <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
                                                     {rowIndex + 1}
                                                 </td>
@@ -591,6 +625,55 @@ export default function RealtimeDataPage() {
                     )}
                 </div>
             </div>
+
+            {/* Winner Modal */}
+            {isWinnerModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-10 max-w-md w-full flex flex-col items-center relative animate-in zoom-in-95 duration-300">
+                        <button
+                            onClick={() => setIsWinnerModalOpen(false)}
+                            className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <Trophy className="w-16 h-16 text-yellow-500 mb-4" />
+                        <h2 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-6 uppercase tracking-widest text-center">
+                            Waktu Habis!
+                        </h2>
+
+                        <div className="w-full flex flex-col gap-3">
+                            {realtimeData.slice(0, 3).map((row, idx) => {
+                                const medals = ["🥇", "🥈", "🥉"];
+                                const colors = [
+                                    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500 border-yellow-200 dark:border-yellow-900/50",
+                                    "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700",
+                                    "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-500 border-orange-200 dark:border-orange-900/50"
+                                ];
+                                return (
+                                    <div key={idx} className={`flex items-center gap-4 p-4 rounded-xl border ${colors[idx]}`}>
+                                        <span className="text-3xl flex-shrink-0">{medals[idx]}</span>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <span className="font-bold text-lg truncate" title={getRowName(row)}>{getRowName(row)}</span>
+                                            <span className="text-sm opacity-80 truncate">{row['STATE'] || 'Belum Selesai'} • {row['TIME TAKEN'] || '-'}</span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                            {realtimeData.length === 0 && (
+                                <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">Belum ada data submit.</p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setIsWinnerModalOpen(false)}
+                            className="mt-8 bg-zinc-800 hover:bg-zinc-900 dark:bg-white dark:hover:bg-zinc-200 dark:text-zinc-900 text-white font-medium py-2.5 px-8 rounded-xl transition-colors w-full shadow-sm cursor-pointer"
+                        >
+                            Tutup
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* BAP Spinning Modal */}
             {isSpinningModalOpen && (
