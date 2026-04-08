@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
+import RaceTimer from "../../components/RaceTimer";
 
 const API_BASE = process.env.NEXT_PUBLIC_URL_LINK || "http://localhost:3000";
 
@@ -47,6 +48,10 @@ export default function RealtimeDataPage() {
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
     const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
     const [hasShownWinnerModal, setHasShownWinnerModal] = useState(false);
+
+    const [totalDurationSeconds, setTotalDurationSeconds] = useState<number | null>(null);
+    const [racingAspraks, setRacingAspraks] = useState<string[]>([]);
+    const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
 
     const [asprakText, setAsprakText] = useState<string>('');
     const [isSpinningModalOpen, setIsSpinningModalOpen] = useState(false);
@@ -114,13 +119,28 @@ export default function RealtimeDataPage() {
 
     const handleStartTimer = () => {
         setHasShownWinnerModal(false);
+
+        const asprakList = asprakText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+        const selectedAspraks = asprakList.slice(0, 6);
+
+        if (selectedAspraks.length > 0) {
+            setRacingAspraks(selectedAspraks);
+            const randomWinner = Math.floor(Math.random() * selectedAspraks.length);
+            setWinnerIndex(randomWinner);
+        } else {
+            setRacingAspraks([]);
+            setWinnerIndex(null);
+        }
+
+        let dest: Date;
         if (timerMode === 'duration') {
-            const dest = new Date();
+            dest = new Date();
             dest.setMinutes(dest.getMinutes() + durationMinutes);
             setTargetDate(dest);
+            setTotalDurationSeconds(durationMinutes * 60);
         } else {
             if (!rangeEnd) return;
-            const dest = new Date();
+            dest = new Date();
             const [endH, endM] = rangeEnd.split(':').map(Number);
             dest.setHours(endH, endM, 0, 0);
 
@@ -128,6 +148,7 @@ export default function RealtimeDataPage() {
                 dest.setDate(dest.getDate() + 1);
             }
             setTargetDate(dest);
+            setTotalDurationSeconds(Math.floor((dest.getTime() - new Date().getTime()) / 1000));
         }
     };
 
@@ -248,14 +269,12 @@ export default function RealtimeDataPage() {
     }, []);
 
     useEffect(() => {
-        // Reset state when switching rooms
         setRealtimeData([]);
         setLastUpdated(null);
         setIsConnected(false);
 
         if (!activeRoom || !hasJoined) return;
 
-        // Connect to our Next.js Server-Sent Events endpoint with the specific room
         const eventSource = new EventSource(`/api/stream?room=${encodeURIComponent(activeRoom || 'default')}`);
 
         eventSource.onopen = () => {
@@ -522,7 +541,6 @@ export default function RealtimeDataPage() {
                             )}
                         </div>
 
-                        {/* Kode Asprak Textbox */}
                         <div className="flex flex-col gap-4 mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-6 w-full">
                             <span className="text-xs text-zinc-800 dark:text-zinc-200 font-medium tracking-wider flex items-center gap-2">
                                 <Users className="w-4 h-4 text-zinc-500" />
@@ -561,24 +579,42 @@ export default function RealtimeDataPage() {
                 </>
             }
         >
-            {/* Scrollable Tables View Container */}
-            <div className="flex-1 overflow-auto p-4 md:p-6 pb-20 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center">
+            <div className="flex-1 overflow-auto px-4 py-1 md:px-4 md:py-1 pb-20 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center">
                 <div className="w-full flex-1 flex flex-col max-w-[1600px]">
                     {targetDate && (
-                        <div className="w-full flex justify-center mb-8 mt-2">
-                            <div className={`flex flex-col items-center justify-center py-6 px-16 bg-white dark:bg-zinc-900 border ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'border-red-500 dark:border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-zinc-200 dark:border-zinc-800 shadow-sm'} rounded-3xl transition-all duration-300`}>
-                                <h2 className={`text-xs ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'} font-bold tracking-[0.25em] uppercase mb-1`}>
-                                    TIME REMAINING
-                                </h2>
-                                <div className={`text-6xl md:text-7xl font-black tabular-nums tracking-tighter ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-800 dark:text-white'}`}>
-                                    {formatTimeRemaining()}
-                                </div>
-                                {timerMode === 'range' && rangeEnd && (
-                                    <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 font-medium">
-                                        Akan berakhir pada {rangeEnd}
+                        <div className="w-full mb-2 flex flex-col items-center relative">
+                            {racingAspraks.length > 0 ? (
+                                <>
+                                    <RaceTimer
+                                        timeRemaining={timeRemaining}
+                                        totalDurationSeconds={totalDurationSeconds}
+                                        racingAspraks={racingAspraks}
+                                        winnerIndex={winnerIndex}
+                                    />
+                                    <div className={`absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center py-2 px-6 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm border opacity-80 ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'border-red-500 dark:border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-zinc-200 dark:border-zinc-800 shadow-sm'} rounded-2xl transition-all duration-300 z-50 min-w-[200px] pointer-events-none`}>
+                                        <h2 className={`text-[10px] md:text-xs ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'} font-bold tracking-[0.2em] uppercase mb-0.5`}>
+                                            TIME REMAINING
+                                        </h2>
+                                        <div className={`text-4xl md:text-5xl font-black tabular-nums tracking-tighter ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-800 dark:text-white'}`}>
+                                            {formatTimeRemaining()}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+                                </>
+                            ) : (
+                                <div className={`flex flex-col items-center justify-center py-2 px-16 bg-white dark:bg-zinc-900 border ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'border-red-500 dark:border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-zinc-200 dark:border-zinc-800 shadow-sm'} rounded-3xl transition-all duration-300`}>
+                                    <h2 className={`text-xs ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'} font-bold tracking-[0.25em] uppercase mb-1`}>
+                                        TIME REMAINING
+                                    </h2>
+                                    <div className={`text-6xl md:text-7xl font-black tabular-nums tracking-tighter ${timeRemaining !== null && timeRemaining <= 300 && timeRemaining > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-800 dark:text-white'}`}>
+                                        {formatTimeRemaining()}
+                                    </div>
+                                    {timerMode === 'range' && rangeEnd && (
+                                        <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 font-medium">
+                                            Akan berakhir pada {rangeEnd}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -626,7 +662,6 @@ export default function RealtimeDataPage() {
                 </div>
             </div>
 
-            {/* Winner Modal */}
             {isWinnerModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-10 max-w-md w-full flex flex-col items-center relative animate-in zoom-in-95 duration-300">
@@ -675,7 +710,6 @@ export default function RealtimeDataPage() {
                 </div>
             )}
 
-            {/* BAP Spinning Modal */}
             {isSpinningModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-10 max-w-sm w-full text-center flex flex-col items-center relative animate-in zoom-in-95 duration-300">
@@ -691,10 +725,8 @@ export default function RealtimeDataPage() {
                         </h2>
 
                         <div className="w-56 h-56 rounded-full flex items-center justify-center overflow-hidden mb-8 relative shadow-[0_0_30px_rgba(99,102,241,0.3)]">
-                            {/* Pointer Triangle */}
                             <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-6 bg-red-500 z-10 [clip-path:polygon(50%_100%,0_0,100%_0)] drop-shadow-md pb-2"></div>
 
-                            {/* Inner Spinning Wheel */}
                             <div
                                 className="w-full h-full rounded-full relative transition-transform shadow-inner border-2 border-zinc-200 dark:border-zinc-700"
                                 style={{
@@ -717,14 +749,12 @@ export default function RealtimeDataPage() {
                                                 transform: `rotate(${rotation}deg)`,
                                             }}
                                         >
-                                            {/* Text offset to push to the edge of the wheel */}
                                             <div className="pt-2">{asprak}</div>
                                         </div>
                                     )
                                 })}
                             </div>
 
-                            {/* Center Knob */}
                             <div className="absolute w-6 h-6 bg-white dark:bg-zinc-800 rounded-full z-10 shadow-lg border-[3px] border-indigo-400"></div>
                         </div>
 
