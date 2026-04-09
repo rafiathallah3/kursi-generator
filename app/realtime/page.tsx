@@ -323,7 +323,17 @@ export default function RealtimeDataPage() {
     }, [activeRoom, hasJoined]);
 
     const hasData = realtimeData.length > 0;
-    const headers = hasData ? Object.keys(realtimeData[0]) : [];
+    const allHeaders = hasData ? Object.keys(realtimeData[0]) : [];
+
+    // Filter headers to hide Student ID and sensitive info
+    const headers = allHeaders.filter(header => {
+        const h = header.toUpperCase();
+        return h !== 'ID' && h !== 'NUMBER' && h !== 'NIM' && h !== 'EMAIL ADDRESS' && h !== 'STUDENT ID';
+    });
+
+    const totalStudents = realtimeData.length;
+    const completedStudentsCount = realtimeData.filter(row => row['STATE'] === 'Finished').length;
+    const notCompletedStudentsCount = totalStudents - completedStudentsCount;
 
     const handleJoinClick = () => {
         if (roomInput) {
@@ -627,36 +637,69 @@ export default function RealtimeDataPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden overflow-x-auto flex flex-col min-w-0">
-                            <table className="w-full text-left text-sm whitespace-normal">
-                                <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-                                    <tr>
-                                        <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider w-12 text-center">Rnk</th>
-                                        {headers.map((header, idx) => (
-                                            <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider whitespace-nowrap">
-                                                {header}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-                                    {realtimeData.map((row, rowIndex) => {
-                                        const isFinished = row['STATE'] === 'Finished';
-                                        return (
-                                            <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-100 dark:bg-emerald-900/10' : ''}`}>
-                                                <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
-                                                    {rowIndex + 1}
-                                                </td>
-                                                {headers.map((header, colIndex) => (
-                                                    <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                                                        {row[header] || '-'}
+                        <div className="flex flex-col gap-4">
+                            <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden overflow-x-auto flex flex-col min-w-0">
+                                <table className="w-full text-left text-sm whitespace-normal">
+                                    <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
+                                        <tr>
+                                            <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider w-12 text-center">Rnk</th>
+                                            {headers.map((header, idx) => (
+                                                <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider whitespace-nowrap">
+                                                    {header}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                                        {realtimeData.map((row, rowIndex) => {
+                                            const isFinished = row['STATE'] === 'Finished';
+                                            return (
+                                                <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-100 dark:bg-emerald-900/10' : ''}`}>
+                                                    <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
+                                                        {rowIndex + 1}
                                                     </td>
-                                                ))}
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
+                                                    {headers.map((header, colIndex) => (
+                                                        <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                            {row[header] || '-'}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Statistics Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total Peserta</div>
+                                        <div className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{totalStudents}</div>
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                        <Check className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Sudah Submit</div>
+                                        <div className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{completedStudentsCount}</div>
+                                    </div>
+                                </div>
+                                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                                        <X className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Belum Selesai</div>
+                                        <div className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{notCompletedStudentsCount}</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -676,6 +719,16 @@ export default function RealtimeDataPage() {
                         <h2 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-6 uppercase tracking-widest text-center">
                             Waktu Habis!
                         </h2>
+
+                        {racingAspraks.length > 0 && winnerIndex !== null && (
+                            <div className="w-full flex flex-col items-center p-4 mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl animate-in zoom-in-95 duration-500 delay-300 fill-mode-both">
+                                <span className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mb-1">ASPRAK BAP</span>
+                                <div className="flex items-center gap-3">
+                                    <Trophy className="w-5 h-5 text-yellow-500" />
+                                    <span className="text-xl font-black text-zinc-800 dark:text-white uppercase leading-none">{racingAspraks[winnerIndex]}</span>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="w-full flex flex-col gap-3">
                             {realtimeData.slice(0, 3).map((row, idx) => {
