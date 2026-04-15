@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X } from "lucide-react";
+import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2 } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
 import RaceTimer from "../../components/RaceTimer";
@@ -39,6 +39,9 @@ export default function RealtimeDataPage() {
     const [activeRoom, setActiveRoom] = useState<string>('');
     const [isCopied, setIsCopied] = useState(false);
     const [hasJoined, setHasJoined] = useState(false);
+
+    const [receiveStatus, setReceiveStatus] = useState<'idle' | 'waiting' | 'received'>('idle');
+    const [finishedBgOpacity, setFinishedBgOpacity] = useState<number>(0.1);
 
     const [timerMode, setTimerMode] = useState<'duration' | 'range'>('duration');
     const [durationMinutes, setDurationMinutes] = useState<number>(60);
@@ -279,6 +282,7 @@ export default function RealtimeDataPage() {
 
         eventSource.onopen = () => {
             setIsConnected(true);
+            setReceiveStatus('waiting');
         };
 
         eventSource.onmessage = (event) => {
@@ -306,6 +310,15 @@ export default function RealtimeDataPage() {
 
                     setRealtimeData([...sortedData]);
                     setLastUpdated(new Date().toLocaleTimeString());
+                    
+                    setReceiveStatus('waiting');
+                    setTimeout(() => {
+                        setReceiveStatus('received');
+                    }, 500);
+                    
+                    setTimeout(() => {
+                        setReceiveStatus('idle');
+                    }, 1500);
                 }
             } catch (error) {
                 console.error("Failed parsing message:", error);
@@ -416,6 +429,19 @@ export default function RealtimeDataPage() {
                                 <span>Updated: <strong className="text-zinc-800 dark:text-zinc-200">{lastUpdated}</strong></span>
                             </div>
                         )}
+
+                        <div className="flex flex-col gap-2 mt-2">
+                            <label className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Darkness Baris Selesai</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={finishedBgOpacity}
+                                onChange={(e) => setFinishedBgOpacity(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer dark:bg-zinc-700"
+                            />
+                        </div>
 
                         {hasJoined && (
                             <div className="flex flex-col gap-2 mt-4">
@@ -584,9 +610,21 @@ export default function RealtimeDataPage() {
                 </>
             }
             headerRightContent={
-                <>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center w-6 h-6 text-emerald-500 pointer-events-none relative overflow-hidden">
+                        <Loader2 
+                            className={`absolute w-4 h-4 text-emerald-400 animate-spin transition-all duration-300 ${
+                                receiveStatus === 'waiting' ? 'opacity-50 scale-100' : 'opacity-0 scale-50'
+                            }`} 
+                        />
+                        <Check 
+                            className={`absolute w-5 h-5 stroke-[2.5] transition-all duration-500 ${
+                                receiveStatus === 'received' ? 'opacity-50 scale-100' : 'opacity-0 scale-150'
+                            }`} 
+                        />
+                    </div>
                     <ThemeToggle />
-                </>
+                </div>
             }
         >
             <div className="flex-1 overflow-auto px-4 py-1 md:px-4 md:py-1 pb-20 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center">
@@ -654,15 +692,31 @@ export default function RealtimeDataPage() {
                                         {realtimeData.map((row, rowIndex) => {
                                             const isFinished = row['STATE'] === 'Finished';
                                             return (
-                                                <tr key={rowIndex} className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${isFinished ? 'bg-emerald-100 dark:bg-emerald-900/10' : ''}`}>
+                                                <tr key={rowIndex} 
+                                                    className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors`}
+                                                    style={isFinished ? { backgroundColor: `rgba(16, 185, 129, ${finishedBgOpacity})` } : {}}
+                                                >
                                                     <td className="py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-bold text-zinc-500 dark:text-zinc-400">
                                                         {rowIndex + 1}
                                                     </td>
-                                                    {headers.map((header, colIndex) => (
-                                                        <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                                                            {row[header] || '-'}
-                                                        </td>
-                                                    ))}
+                                                    {headers.map((header, colIndex) => {
+                                                        let cellValue = row[header] || '-';
+
+                                                        if (typeof cellValue === 'string' && (header.toLowerCase().includes('started') || header.toLowerCase().includes('completed'))) {
+                                                            if (cellValue !== '-' && cellValue !== 'Not yet graded' && cellValue !== 'In progress') {
+                                                                const timeMatch = cellValue.match(/(\d{1,2}[:.]\d{2}(?:\s*[ap]m)?)/i);
+                                                                if (timeMatch) {
+                                                                    cellValue = timeMatch[1].replace('.', ':').toUpperCase();
+                                                                }
+                                                            }
+                                                        }
+
+                                                        return (
+                                                            <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                                {cellValue}
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             )
                                         })}
