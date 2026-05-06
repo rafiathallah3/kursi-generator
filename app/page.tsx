@@ -21,7 +21,8 @@ export default function Home() {
 	const [selectedMatkul, setSelectedMatkul] = useState<string>("");
 	const [selectedClass, setSelectedClass] = useState<string>("");
 	const [allData, setAllData] = useState<StudentData[] | null>(null);
-	const [shuffledStudents, setShuffledStudents] = useState<StudentData[]>([]);
+	const [seatAssignments, setSeatAssignments] = useState<Record<number, StudentData | null>>({});
+	const [draggedSeat, setDraggedSeat] = useState<number | null>(null);
 
 	const [loading, setLoading] = useState<boolean>(false);
 	const [error, setError] = useState<string | null>(null);
@@ -110,18 +111,62 @@ export default function Home() {
 		}
 	}, [classes, selectedClass]);
 
-	const performShuffle = useCallback(() => {
+	const performShuffle = useCallback((overrideExcluded?: Set<string>) => {
 		if (!activeStudents || activeStudents.length === 0) {
-			setShuffledStudents([]);
+			setSeatAssignments({});
 			return;
 		}
-		setShuffledStudents(shuffleArray(activeStudents));
-	}, [activeStudents]);
+		
+		const excluded = overrideExcluded ?? excludedStudents;
+		const effectiveStudents = activeStudents.filter(student => {
+			const key = student["NIM"] || student["Nama"] || student["Name"];
+			return !excluded.has(String(key));
+		});
+		
+		const shuffled = shuffleArray(effectiveStudents);
+		const newAssignments: Record<number, StudentData | null> = {};
+		
+		let studentIdx = 0;
+		for (let i = 1; i <= 50; i++) {
+			if (!unavailableSeats.has(i) && studentIdx < shuffled.length) {
+				newAssignments[i] = shuffled[studentIdx];
+				studentIdx++;
+			} else {
+				newAssignments[i] = null;
+			}
+		}
+		setSeatAssignments(newAssignments);
+	}, [activeStudents, excludedStudents, unavailableSeats]);
 
 	useEffect(() => {
-		setExcludedStudents(new Set());
-		performShuffle();
-	}, [activeStudents, performShuffle]);
+		const emptySet = new Set<string>();
+		setExcludedStudents(emptySet);
+		performShuffle(emptySet);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [activeStudents]);
+
+	const handleDragStart = (e: React.DragEvent, seatNumber: number) => {
+		setDraggedSeat(seatNumber);
+	};
+
+	const handleDragOver = (e: React.DragEvent) => {
+		e.preventDefault();
+	};
+
+	const handleDrop = (e: React.DragEvent, targetSeat: number) => {
+		e.preventDefault();
+		if (draggedSeat === null || draggedSeat === targetSeat) return;
+		if (unavailableSeats.has(targetSeat)) return;
+
+		setSeatAssignments(prev => {
+			const newAssignments = { ...prev };
+			const temp = newAssignments[targetSeat];
+			newAssignments[targetSeat] = newAssignments[draggedSeat];
+			newAssignments[draggedSeat] = temp;
+			return newAssignments;
+		});
+		setDraggedSeat(null);
+	};
 
 
 	const toggleSeat = (seatNum: number) => {
@@ -131,6 +176,19 @@ export default function Home() {
 				newSet.delete(seatNum);
 			} else {
 				newSet.add(seatNum);
+				setSeatAssignments(prevAssignments => {
+					const studentToMove = prevAssignments[seatNum];
+					if (!studentToMove) return prevAssignments;
+					
+					const nextAssignments = { ...prevAssignments, [seatNum]: null };
+					for (let i = 1; i <= 50; i++) {
+						if (!newSet.has(i) && !nextAssignments[i]) {
+							nextAssignments[i] = studentToMove;
+							break;
+						}
+					}
+					return nextAssignments;
+				});
 			}
 			return newSet;
 		});
@@ -139,27 +197,16 @@ export default function Home() {
 	const seats = useMemo(() => {
 		const totalSeats = 50;
 		const layout = [];
-		let studentIndex = 0;
-
-		const effectiveStudents = shuffledStudents.filter(student => {
-			const key = student["NIM"] || student["Nama"] || student["Name"];
-			return !excludedStudents.has(String(key));
-		});
 
 		for (let i = 1; i <= totalSeats; i++) {
 			if (unavailableSeats.has(i)) {
 				layout.push({ seatNumber: i, isAvailable: false, student: null });
 			} else {
-				if (studentIndex < effectiveStudents.length) {
-					layout.push({ seatNumber: i, isAvailable: true, student: effectiveStudents[studentIndex] });
-					studentIndex++;
-				} else {
-					layout.push({ seatNumber: i, isAvailable: true, student: null });
-				}
+				layout.push({ seatNumber: i, isAvailable: true, student: seatAssignments[i] || null });
 			}
 		}
 		return layout;
-	}, [shuffledStudents, unavailableSeats, excludedStudents]);
+	}, [seatAssignments, unavailableSeats]);
 
 	const tables = useMemo(() => {
 		const chunks = [];
@@ -246,8 +293,34 @@ export default function Home() {
 												onChange={() => {
 													setExcludedStudents(prev => {
 														const newSet = new Set(prev);
-														if (newSet.has(key)) newSet.delete(key);
-														else newSet.add(key);
+														if (newSet.has(key)) {
+															newSet.delete(key);
+															const studentToAdd = activeStudents.find(s => String(s["NIM"] || s["Nama"] || s["Name"] || "") === key);
+															if (studentToAdd) {
+																setSeatAssignments(prevAssignments => {
+																	const nextAssignments = { ...prevAssignments };
+																	for (let i = 1; i <= 50; i++) {
+																		if (!unavailableSeats.has(i) && !nextAssignments[i]) {
+																			nextAssignments[i] = studentToAdd;
+																			break;
+																		}
+																	}
+																	return nextAssignments;
+																});
+															}
+														} else {
+															newSet.add(key);
+															setSeatAssignments(prevAssignments => {
+																const nextAssignments = { ...prevAssignments };
+																for (let i = 1; i <= 50; i++) {
+																	const s = nextAssignments[i];
+																	if (s && String(s["NIM"] || s["Nama"] || s["Name"] || "") === key) {
+																		nextAssignments[i] = null;
+																	}
+																}
+																return nextAssignments;
+															});
+														}
 														return newSet;
 													});
 												}}
@@ -330,7 +403,15 @@ export default function Home() {
 													const studentAsprak = row.student ? (row.student["ASPRAK"] || row.student["Asprak"] || "") : "";
 
 													return (
-														<tr key={row.seatNumber} className={`h-[48px] 2xl:h-[60px] transition-colors ${isError ? 'bg-red-500 dark:bg-red-600' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}>
+														<tr 
+															key={row.seatNumber} 
+															className={`h-[48px] 2xl:h-[60px] transition-colors ${isError ? 'bg-red-500 dark:bg-red-600' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-grab active:cursor-grabbing'} ${draggedSeat === row.seatNumber ? 'opacity-50 border border-blue-500 border-dashed' : ''}`}
+															draggable={!isError}
+															onDragStart={(e) => handleDragStart(e, row.seatNumber)}
+															onDragOver={handleDragOver}
+															onDrop={(e) => handleDrop(e, row.seatNumber)}
+															onDragEnd={() => setDraggedSeat(null)}
+														>
 															<td className={`py-2 px-2 border-r border-zinc-100 dark:border-zinc-800/80 text-center font-medium ${isError ? 'text-transparent' : 'text-zinc-500 dark:text-zinc-400'}`}>
 																{row.seatNumber}
 															</td>
