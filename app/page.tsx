@@ -362,7 +362,7 @@ export default function Home() {
 						Setup Praktikum
 					</a>
 					<button
-						onClick={performShuffle}
+						onClick={() => performShuffle()}
 						className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors hidden sm:block cursor-pointer"
 					>
 						Ganti Tempat Duduk
