@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2 } from "lucide-react";
+import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2, AlertCircle } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
 import RaceTimer from "../../components/RaceTimer";
@@ -34,6 +34,8 @@ function parseTimeTaken(timeStr: string): number {
 export default function RealtimeDataPage() {
     const [realtimeData, setRealtimeData] = useState<any[]>([]);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+    const [lastUpdateDate, setLastUpdateDate] = useState<Date | null>(null);
+    const [isDataStale, setIsDataStale] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [roomInput, setRoomInput] = useState<string>('IF-48-INT');
     const [activeRoom, setActiveRoom] = useState<string>('');
@@ -43,7 +45,7 @@ export default function RealtimeDataPage() {
     const [receiveStatus, setReceiveStatus] = useState<'idle' | 'waiting' | 'received'>('idle');
     const [finishedBgOpacity, setFinishedBgOpacity] = useState<number>(0.1);
 
-    const [timerMode, setTimerMode] = useState<'duration' | 'range'>('duration');
+    const [timerMode, setTimerMode] = useState<'duration' | 'range'>('range');
     const [durationMinutes, setDurationMinutes] = useState<number>(60);
     const [rangeStart, setRangeStart] = useState<string>('');
     const [rangeEnd, setRangeEnd] = useState<string>('');
@@ -59,7 +61,6 @@ export default function RealtimeDataPage() {
     const [asprakText, setAsprakText] = useState<string>('');
     const [isSpinningModalOpen, setIsSpinningModalOpen] = useState(false);
     const [isSpinning, setIsSpinning] = useState(false);
-    const [spinningText, setSpinningText] = useState<string>('');
     const [selectedBap, setSelectedBap] = useState<string | null>(null);
 
     const [wheelDegrees, setWheelDegrees] = useState(0);
@@ -108,6 +109,29 @@ export default function RealtimeDataPage() {
             if (interval) clearInterval(interval);
         };
     }, [targetDate]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (lastUpdateDate) {
+                const now = new Date();
+                const diff = now.getTime() - lastUpdateDate.getTime();
+                setIsDataStale(diff > 60000);
+            } else {
+                setIsDataStale(false);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [lastUpdateDate]);
+
+    const getStaleTimeText = () => {
+        if (!lastUpdateDate) return "";
+        const now = new Date();
+        const diff = now.getTime() - lastUpdateDate.getTime();
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        return `Data belum diupdate selama ${mins}m ${secs}s`;
+    };
 
     const formatTimeRemaining = () => {
         if (timeRemaining === null) return null;
@@ -309,13 +333,16 @@ export default function RealtimeDataPage() {
                     });
 
                     setRealtimeData([...sortedData]);
-                    setLastUpdated(new Date().toLocaleTimeString());
-                    
+                    const now = new Date();
+                    setLastUpdated(now.toLocaleTimeString());
+                    setLastUpdateDate(now);
+                    setIsDataStale(false);
+
                     setReceiveStatus('waiting');
                     setTimeout(() => {
                         setReceiveStatus('received');
                     }, 500);
-                    
+
                     setTimeout(() => {
                         setReceiveStatus('idle');
                     }, 1500);
@@ -402,6 +429,22 @@ export default function RealtimeDataPage() {
                                 Listen
                             </button>
                         )}
+                        <div className="flex items-center justify-between px-1 mt-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider">
+                                <Clock className="w-3 h-3" />
+                                Last Updated
+                            </div>
+                            {lastUpdated ? (
+                                <div className="text-[10px] font-bold text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 tabular-nums">
+                                    {lastUpdated}
+                                </div>
+                            ) : (
+                                <div className="text-[10px] font-bold text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 tabular-nums">
+                                    Ditunggu...
+                                </div>
+                            )}
+                        </div>
+
                     </div>
 
                     <div className="flex flex-col gap-4 mt-2">
@@ -423,12 +466,6 @@ export default function RealtimeDataPage() {
                             </span>
                         </div>
 
-                        {lastUpdated && (
-                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 text-xs">
-                                <Clock className="w-4 h-4" />
-                                <span>Updated: <strong className="text-zinc-800 dark:text-zinc-200">{lastUpdated}</strong></span>
-                            </div>
-                        )}
 
                         <div className="flex flex-col gap-2 mt-2">
                             <label className="text-xs text-zinc-800 dark:text-zinc-200 font-medium">Darkness Baris Selesai</label>
@@ -604,23 +641,28 @@ export default function RealtimeDataPage() {
                     <div className="w-8 h-8 flex items-center justify-center text-blue-600 dark:text-blue-400">
                         <Trophy className="w-6 h-6" />
                     </div>
-                    <h1 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate">
+                    <h1 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate flex items-center gap-2">
                         Leaderboard - {activeRoom}
+                        {isDataStale && (
+                            <div className="flex items-center justify-center animate-pulse" title={getStaleTimeText()}>
+                                <div className="bg-red-500/20 p-1 rounded-full border border-red-500/30">
+                                    <AlertCircle className="w-4 h-4 text-red-500/60" />
+                                </div>
+                            </div>
+                        )}
                     </h1>
                 </>
             }
             headerRightContent={
                 <div className="flex items-center gap-2">
                     <div className="flex items-center justify-center w-6 h-6 text-emerald-500 pointer-events-none relative overflow-hidden">
-                        <Loader2 
-                            className={`absolute w-4 h-4 text-emerald-400 animate-spin transition-all duration-300 ${
-                                receiveStatus === 'waiting' ? 'opacity-50 scale-100' : 'opacity-0 scale-50'
-                            }`} 
+                        <Loader2
+                            className={`absolute w-4 h-4 text-emerald-400 animate-spin transition-all duration-300 ${receiveStatus === 'waiting' ? 'opacity-50 scale-100' : 'opacity-0 scale-50'
+                                }`}
                         />
-                        <Check 
-                            className={`absolute w-5 h-5 stroke-[2.5] transition-all duration-500 ${
-                                receiveStatus === 'received' ? 'opacity-50 scale-100' : 'opacity-0 scale-150'
-                            }`} 
+                        <Check
+                            className={`absolute w-5 h-5 stroke-[2.5] transition-all duration-500 ${receiveStatus === 'received' ? 'opacity-100 scale-100' : 'opacity-0 scale-150'
+                                }`}
                         />
                     </div>
                     <ThemeToggle />
@@ -692,7 +734,7 @@ export default function RealtimeDataPage() {
                                         {realtimeData.map((row, rowIndex) => {
                                             const isFinished = row['STATE'] === 'Finished';
                                             return (
-                                                <tr key={rowIndex} 
+                                                <tr key={rowIndex}
                                                     className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors`}
                                                     style={isFinished ? { backgroundColor: `rgba(16, 185, 129, ${finishedBgOpacity})` } : {}}
                                                 >
