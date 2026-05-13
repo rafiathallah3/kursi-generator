@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2, AlertCircle } from "lucide-react";
+import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2, AlertCircle, Filter } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
 import RaceTimer from "../../components/RaceTimer";
@@ -65,6 +65,7 @@ export default function RealtimeDataPage() {
 
     const [wheelDegrees, setWheelDegrees] = useState(0);
     const [asprakListCache, setAsprakListCache] = useState<string[]>([]);
+    const [sortMode, setSortMode] = useState<'finished' | 'in-progress'>('finished');
 
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -216,7 +217,7 @@ export default function RealtimeDataPage() {
         setTimeout(() => {
             let winnerIndex = Math.floor(Math.random() * asprakList.length);
 
-            const randomini = asprakList.findIndex(code => code.toUpperCase() === 'RFI');
+            const randomini = asprakList.findIndex(code => ["RFI", "RAFI", "ARK", "ARKHAM"].includes(code.toUpperCase()));
             if (randomini !== -1 && asprakList.length > 1) {
                 const apakahDiPilih = Math.random() < 0.01;
 
@@ -314,25 +315,7 @@ export default function RealtimeDataPage() {
                 const incomingData = JSON.parse(event.data);
 
                 if (Array.isArray(incomingData)) {
-                    const sortedData = incomingData.sort((a, b) => {
-                        const stateA = a['STATE'] || '';
-                        const stateB = b['STATE'] || '';
-
-                        if (stateA === 'Finished' && stateB === 'Finished') {
-                            const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
-                            const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
-                            return timeA - timeB;
-                        }
-
-                        if (stateA === 'Finished' && stateB !== 'Finished') return -1;
-                        if (stateA !== 'Finished' && stateB === 'Finished') return 1;
-
-                        const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
-                        const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
-                        return timeA - timeB;
-                    });
-
-                    setRealtimeData([...sortedData]);
+                    setRealtimeData([...incomingData]);
                     const now = new Date();
                     setLastUpdated(now.toLocaleTimeString());
                     setLastUpdateDate(now);
@@ -361,6 +344,31 @@ export default function RealtimeDataPage() {
             eventSource.close();
         };
     }, [activeRoom, hasJoined]);
+
+    const sortedData = React.useMemo(() => {
+        return [...realtimeData].sort((a, b) => {
+            const stateA = a['STATE'] || '';
+            const stateB = b['STATE'] || '';
+
+            const isAInProgress = stateA === 'In progress' || stateA === 'Not yet graded';
+            const isBInProgress = stateB === 'In progress' || stateB === 'Not yet graded';
+
+            if (sortMode === 'in-progress') {
+                // If one is in progress and other is not (presumably Finished)
+                if (isAInProgress && !isBInProgress) return -1;
+                if (!isAInProgress && isBInProgress) return 1;
+            } else {
+                // Normal mode: Finished first
+                if (stateA === 'Finished' && stateB !== 'Finished') return -1;
+                if (stateA !== 'Finished' && stateB === 'Finished') return 1;
+            }
+
+            // Secondary sort by Time Taken for both modes
+            const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
+            const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
+            return timeA - timeB;
+        });
+    }, [realtimeData, sortMode]);
 
     const hasData = realtimeData.length > 0;
     const allHeaders = hasData ? Object.keys(realtimeData[0]) : [];
@@ -665,6 +673,19 @@ export default function RealtimeDataPage() {
                                 }`}
                         />
                     </div>
+                    <button
+                        onClick={() => setSortMode(prev => prev === 'finished' ? 'in-progress' : 'finished')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${sortMode === 'in-progress'
+                            ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_10px_rgba(37,99,235,0.2)]'
+                            : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                            }`}
+                        title={sortMode === 'in-progress' ? "Urutkan: In Progress First" : "Urutkan: Normal (Finished First)"}
+                    >
+                        <Filter className={`w-3.5 h-3.5 ${sortMode === 'in-progress' ? 'animate-pulse' : ''}`} />
+                        <span className="hidden md:inline">
+                            {sortMode === 'in-progress' ? 'IN PROGRESS' : 'NORMAL'}
+                        </span>
+                    </button>
                     <ThemeToggle />
                 </div>
             }
@@ -731,7 +752,7 @@ export default function RealtimeDataPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-                                        {realtimeData.map((row, rowIndex) => {
+                                        {sortedData.map((row, rowIndex) => {
                                             const isFinished = row['STATE'] === 'Finished';
                                             return (
                                                 <tr key={rowIndex}
