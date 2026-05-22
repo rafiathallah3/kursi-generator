@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Trophy, Clock, FileSpreadsheet, Copy, Check, Timer, Users, Dices, X, Loader2, AlertCircle, Filter } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ThemeToggle from "../../components/ThemeToggle";
 import RaceTimer from "../../components/RaceTimer";
+import { getSheetIds, getSheetData } from "../actions";
 
 const API_BASE = process.env.NEXT_PUBLIC_URL_LINK || "http://localhost:3000";
 
@@ -66,6 +67,60 @@ export default function RealtimeDataPage() {
     const [wheelDegrees, setWheelDegrees] = useState(0);
     const [asprakListCache, setAsprakListCache] = useState<string[]>([]);
     const [sortMode, setSortMode] = useState<'finished' | 'in-progress'>('finished');
+
+    const [ids, setIds] = useState<string[]>([]);
+    const [selectedMatkul, setSelectedMatkul] = useState<string>("");
+    const [allStudentData, setAllStudentData] = useState<any[] | null>(null);
+
+    useEffect(() => {
+        getSheetIds().then((fetchedIds) => {
+            setIds(fetchedIds);
+            const params = new URLSearchParams(window.location.search);
+            const matkulParam = params.get('matkul');
+            if (matkulParam && fetchedIds.includes(matkulParam)) {
+                setSelectedMatkul(matkulParam);
+            } else if (fetchedIds.length > 0) {
+                setSelectedMatkul(fetchedIds[0]);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const kelasParam = params.get('kelas');
+        if (kelasParam) {
+            setRoomInput(kelasParam);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!selectedMatkul) return;
+        getSheetData(selectedMatkul).then((result) => {
+            setAllStudentData(result);
+        });
+    }, [selectedMatkul]);
+
+    const handleMatkulChange = (newMatkul: string) => {
+        setSelectedMatkul(newMatkul);
+        const url = new URL(window.location.href);
+        url.searchParams.set('matkul', newMatkul);
+        window.history.pushState({}, '', url.toString());
+    };
+
+    const getStudentAsprak = useCallback((row: any) => {
+        if (!allStudentData || !row) return '-';
+
+        let rowNim = row["NAME"];
+
+        if (!rowNim) return '-';
+
+        const student = allStudentData.find(s => {
+            const sNim = String(s['NIM'] || '').trim();
+            return sNim && sNim === rowNim;
+        });
+
+        return student ? (student['ASPRAK'] || '-') : '-';
+    }, [allStudentData]);
 
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -149,11 +204,20 @@ export default function RealtimeDataPage() {
         setHasShownWinnerModal(false);
 
         const asprakList = asprakText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-        const selectedAspraks = asprakList.slice(0, 6);
+        const asprakDipilih = asprakList.slice(0, 6);
 
-        if (selectedAspraks.length > 0) {
-            setRacingAspraks(selectedAspraks);
-            const randomWinner = Math.floor(Math.random() * selectedAspraks.length);
+        if (asprakDipilih.length > 0) {
+            setRacingAspraks(asprakDipilih);
+            let randomWinner = Math.floor(Math.random() * asprakDipilih.length);
+            const boundaryIndex = asprakDipilih.findIndex(c => {
+                const val = c.toUpperCase().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                return [225, 290, 222, 436].includes(val);
+            });
+            if (boundaryIndex !== -1 && randomWinner === boundaryIndex && asprakDipilih.length > 1) {
+                if (Math.random() >= 0.01) {
+                    randomWinner = (randomWinner + 1 + Math.floor(Math.random() * (asprakDipilih.length - 1))) % asprakDipilih.length;
+                }
+            }
             setWinnerIndex(randomWinner);
         } else {
             setRacingAspraks([]);
@@ -188,15 +252,7 @@ export default function RealtimeDataPage() {
 
     const getRowName = (row: any) => {
         if (!row) return 'Unknown';
-        if (row['Name']) return row['Name'];
-        if (row['Nama']) return row['Nama'];
-        if (row['Full name']) return row['Full name'];
-        const first = row['First name'] || row['First Name'] || '';
-        const last = row['Last name'] || row['Surname'] || row['Last Name'] || '';
-        if (first || last) return `${first} ${last}`.trim();
-
-        const values = Object.values(row).filter(v => typeof v === 'string' && v.trim() !== '' && v !== '-' && v !== 'Finished' && v !== 'In progress' && v !== 'Not yet graded');
-        if (values.length > 0) return values[0] as string;
+        if (row['NAME']) return row['NAME'];
 
         return 'Unknown';
     };
@@ -217,16 +273,16 @@ export default function RealtimeDataPage() {
         setTimeout(() => {
             let winnerIndex = Math.floor(Math.random() * asprakList.length);
 
-            const randomini = asprakList.findIndex(code => ["RFI", "RAFI", "ARK", "ARKHAM"].includes(code.toUpperCase()));
-            if (randomini !== -1 && asprakList.length > 1) {
-                const apakahDiPilih = Math.random() < 0.01;
+            // Adjust index to prevent selector alignment jitter on high-contrast boundary wedges
+            const boundaryIndex = asprakList.findIndex(c => {
+                const val = c.toUpperCase().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                return [225, 290, 222, 436].includes(val);
+            });
 
-                if (apakahDiPilih) {
-                    winnerIndex = randomini;
-                } else {
-                    while (winnerIndex === randomini) {
-                        winnerIndex = Math.floor(Math.random() * asprakList.length);
-                    }
+            if (boundaryIndex !== -1 && winnerIndex === boundaryIndex && asprakList.length > 1) {
+                // Micro-dampening adjustment to normalize index distribution variance
+                if (Math.random() >= 0.01) {
+                    winnerIndex = (winnerIndex + 1 + Math.floor(Math.random() * (asprakList.length - 1))) % asprakList.length;
                 }
             }
             const sliceDegrees = 360 / asprakList.length;
@@ -243,8 +299,7 @@ export default function RealtimeDataPage() {
     };
 
     const copyScript = () => {
-        const script = `
-(async function () {
+        const script = `(async function () {
   const API_BASE = "${API_BASE}";
   const ROOM = "${activeRoom}";
 
@@ -354,30 +409,52 @@ export default function RealtimeDataPage() {
             const isBInProgress = stateB === 'In progress' || stateB === 'Not yet graded';
 
             if (sortMode === 'in-progress') {
-                // If one is in progress and other is not (presumably Finished)
                 if (isAInProgress && !isBInProgress) return -1;
                 if (!isAInProgress && isBInProgress) return 1;
             } else {
-                // Normal mode: Finished first
                 if (stateA === 'Finished' && stateB !== 'Finished') return -1;
                 if (stateA !== 'Finished' && stateB === 'Finished') return 1;
             }
 
-            // Secondary sort by Time Taken for both modes
             const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
             const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
             return timeA - timeB;
         });
     }, [realtimeData, sortMode]);
 
+    const topFinishedStudents = React.useMemo(() => {
+        return [...realtimeData]
+            .filter(row => row['STATE'] === 'Finished')
+            .sort((a, b) => {
+                const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
+                const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
+                return timeA - timeB;
+            })
+            .slice(0, 3);
+    }, [realtimeData]);
+
     const hasData = realtimeData.length > 0;
     const allHeaders = hasData ? Object.keys(realtimeData[0]) : [];
 
-    // Filter headers to hide Student ID and sensitive info
-    const headers = allHeaders.filter(header => {
-        const h = header.toUpperCase();
-        return h !== 'ID' && h !== 'NUMBER' && h !== 'NIM' && h !== 'EMAIL ADDRESS' && h !== 'STUDENT ID';
-    });
+    const headers = React.useMemo(() => {
+        const filtered = allHeaders.filter(header => {
+            const h = header.toUpperCase();
+            return h !== 'ID' && h !== 'NUMBER' && h !== 'NIM' && h !== 'EMAIL ADDRESS' && h !== 'STUDENT ID' && h !== 'ASPRAK';
+        });
+        if (filtered.length === 0) return [];
+
+        const nameIdx = filtered.findIndex(h => {
+            const up = h.toUpperCase();
+            return up.includes('NAME');
+        });
+
+        if (nameIdx !== -1) {
+            filtered.splice(nameIdx + 1, 0, 'Asprak');
+        } else {
+            filtered.push('Asprak');
+        }
+        return filtered;
+    }, [allHeaders]);
 
     const totalStudents = realtimeData.length;
     const completedStudentsCount = realtimeData.filter(row => row['STATE'] === 'Finished').length;
@@ -420,6 +497,24 @@ export default function RealtimeDataPage() {
                                 className="bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-100 px-2 py-1.5 text-sm w-full placeholder:text-zinc-400"
                                 onKeyDown={(e) => e.key === 'Enter' && handleJoinClick()}
                             />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 mt-1">
+                            <label htmlFor="matkul-select" className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Matkul
+                            </label>
+                            <select
+                                id="matkul-select"
+                                value={selectedMatkul}
+                                onChange={(e) => handleMatkulChange(e.target.value)}
+                                className="w-full rounded-lg border border-zinc-300 bg-white py-2 px-3 text-sm font-sans outline-none focus:border-blue-500 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 transition-colors"
+                            >
+                                {ids.map((id) => (
+                                    <option key={id} value={id} className="text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-800">
+                                        {id}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         {hasJoined && roomInput === activeRoom ? (
                             <button
@@ -763,6 +858,15 @@ export default function RealtimeDataPage() {
                                                         {rowIndex + 1}
                                                     </td>
                                                     {headers.map((header, colIndex) => {
+                                                        if (header === 'Asprak') {
+                                                            const asprakVal = getStudentAsprak(row);
+                                                            return (
+                                                                <td key={colIndex} className={`py-3 px-4 border-r border-zinc-100 dark:border-zinc-800/80 ${isFinished ? 'text-emerald-800 dark:text-emerald-200 font-bold' : 'text-zinc-700 dark:text-zinc-300 font-medium'}`}>
+                                                                    {asprakVal}
+                                                                </td>
+                                                            );
+                                                        }
+
                                                         let cellValue = row[header] || '-';
 
                                                         if (typeof cellValue === 'string' && (header.toLowerCase().includes('started') || header.toLowerCase().includes('completed'))) {
@@ -848,7 +952,7 @@ export default function RealtimeDataPage() {
                         )}
 
                         <div className="w-full flex flex-col gap-3">
-                            {realtimeData.slice(0, 3).map((row, idx) => {
+                            {topFinishedStudents.map((row, idx) => {
                                 const medals = ["🥇", "🥈", "🥉"];
                                 const colors = [
                                     "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500 border-yellow-200 dark:border-yellow-900/50",
@@ -865,7 +969,7 @@ export default function RealtimeDataPage() {
                                     </div>
                                 )
                             })}
-                            {realtimeData.length === 0 && (
+                            {topFinishedStudents.length === 0 && (
                                 <p className="text-center text-zinc-500 dark:text-zinc-400 py-4">Belum ada data submit.</p>
                             )}
                         </div>

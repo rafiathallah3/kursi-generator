@@ -7,7 +7,10 @@ const HEADER_INCLUDE = [
     'STATE',
     'STARTED',
     'COMPLETED',
-    'TIME TAKEN'
+    'TIME TAKEN',
+    'NIM',
+    'STUDENT ID',
+    'ID NUMBER'
 ]
 
 export async function OPTIONS() {
