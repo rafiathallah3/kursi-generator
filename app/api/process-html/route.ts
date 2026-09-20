@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emitter } from '../emitter';
 
-const HEADER_INCLUDE = [
-    'NAME',
-    'NUMBER',
-    'STATE',
-    'STARTED',
-    'COMPLETED',
-    'TIME TAKEN',
-    'NIM',
-    'STUDENT ID',
-    'ID NUMBER'
-]
+function mapHeaderName(rawHeader: string): string | null {
+    const clean = rawHeader.toLowerCase().trim();
+    if (!clean) return null;
+
+    if (clean.includes('name') || clean.includes('nama')) {
+        return 'NAME';
+    }
+    if (clean.includes('id number') || clean.includes('nomor id') || clean.includes('nim') || clean.includes('student id')) {
+        return 'ID NUMBER';
+    }
+    if (clean.includes('status') || clean.includes('state') || clean.includes('keadaan')) {
+        return 'STATUS';
+    }
+    if (clean.includes('started') || clean.includes('dimulai')) {
+        return 'STARTED';
+    }
+    if (clean.includes('completed') || clean.includes('selesai')) {
+        return 'COMPLETED';
+    }
+    if (clean.includes('duration') || clean.includes('durasi') || clean.includes('time taken') || clean.includes('waktu yang dihabiskan')) {
+        return 'DURATION';
+    }
+    return null;
+}
 
 export async function OPTIONS() {
     return new NextResponse(null, {
@@ -32,14 +45,23 @@ export async function POST(request: NextRequest) {
     };
 
     try {
-        // Read the raw body as text
-        const htmlContent = await request.text();
+        const rawBody = await request.text();
 
-        if (!htmlContent) {
+        if (!rawBody) {
             return NextResponse.json(
                 { error: 'No HTML content provided' },
                 { status: 400, headers: corsHeaders }
             );
+        }
+
+        let htmlContent = rawBody;
+        try {
+            const parsed = JSON.parse(rawBody);
+            if (parsed && typeof parsed.html === 'string') {
+                htmlContent = parsed.html;
+            }
+        } catch {
+            // rawBody is raw HTML text
         }
 
         const cheerio = require('cheerio');
@@ -58,54 +80,50 @@ export async function POST(request: NextRequest) {
         $table.find('.reviewlink').remove();
 
         const data: any[] = [];
-        const headers: string[] = [];
+        const headers: (string | null)[] = [];
 
         $table.find('thead th').each((_: any, el: any) => {
             const headerText = $(el).text().trim().replace(/\s+/g, ' ');
-            headers.push(headerText || `Unknown_Col_${headers.length}`);
+            headers.push(mapHeaderName(headerText));
         });
+
         $table.find('tbody tr').each((_: any, tr: any) => {
             const $tr = $(tr);
+            if ($tr.hasClass('emptyrow')) {
+                return;
+            }
             if ($tr.find('td').length === 1 && $tr.find('.tabledivider').length > 0) {
                 return;
             }
 
             const rowData: Record<string, string> = {};
 
-            $tr.find('td').each((index: any, td: any) => {
-                const headerName = headers[index];
+            $tr.find('td').each((index: number, td: any) => {
+                const headerKey = headers[index];
+                if (!headerKey) return;
+
                 let cellData = $(td).text().trim().replace(/\s+/g, ' ');
 
                 if ($(td).find('input[type="checkbox"]').length > 0 && !cellData) {
                     cellData = $(td).find('input[type="checkbox"]').val() as string;
                 }
 
-                let apakahAda = false;
-                let header = '';
-                for (let i = 0; i < HEADER_INCLUDE.length; i++) {
-                    if (headerName.toLowerCase().includes(HEADER_INCLUDE[i].toLowerCase())) {
-                        apakahAda = true;
-                        header = HEADER_INCLUDE[i];
-                        break;
-                    }
-                }
-                if (!apakahAda) {
-                    return;
-                }
-
-                rowData[header] = cellData;
+                rowData[headerKey] = cellData;
             });
 
-            const nameKey = Object.keys(rowData).find(key => key.includes('NAME'));
+            if (rowData['NAME']) {
+                rowData['NAME'] = rowData['NAME']
+                    .replace(/Review attempt/gi, '')
+                    .replace(/Overall average/gi, '')
+                    .replace(/Rata-rata keseluruhan/gi, '')
+                    .trim();
 
-            if (nameKey) {
-                rowData[nameKey] = rowData[nameKey].replace(/Review attempt/i, '').replace(/Overall average/i, '').trim();
-                if (!rowData[nameKey]) {
+                if (!rowData['NAME'] || rowData['NAME'].toLowerCase() === 'overall average' || rowData['NAME'].toLowerCase() === 'rata-rata keseluruhan') {
                     return;
                 }
             }
 
-            if (rowData['NAME']) {
+            if (rowData['NAME'] && (rowData['STATUS'] || rowData['DURATION'])) {
                 data.push(rowData);
             }
         });

@@ -9,22 +9,32 @@ import { getSheetIds, getSheetData } from "../actions";
 
 const API_BASE = process.env.NEXT_PUBLIC_URL_LINK || "http://localhost:3000";
 
-function parseTimeTaken(timeStr: string): number {
+function isStudentFinished(status: string): boolean {
+    const s = (status || '').toLowerCase().trim();
+    return s === 'finished' || s === 'selesai';
+}
+
+function isStudentInProgress(status: string): boolean {
+    const s = (status || '').toLowerCase().trim();
+    return s === 'in progress' || s === 'sedang dikerjakan' || s === 'not yet graded';
+}
+
+function parseDuration(timeStr: string): number {
     if (!timeStr || timeStr === '-' || timeStr === 'Not yet graded') return Infinity;
 
     let totalMinutes = 0;
 
-    const hoursMatch = timeStr.match(/(\d+)\s*hour/i);
+    const hoursMatch = timeStr.match(/(\d+)\s*(?:hour|jam)/i);
     if (hoursMatch) {
         totalMinutes += parseInt(hoursMatch[1]) * 60;
     }
 
-    const minsMatch = timeStr.match(/(\d+)\s*mins/i);
+    const minsMatch = timeStr.match(/(\d+)\s*(?:min|menit)/i);
     if (minsMatch) {
         totalMinutes += parseInt(minsMatch[1]);
     }
 
-    const secsMatch = timeStr.match(/(\d+)\s*sec/i);
+    const secsMatch = timeStr.match(/(\d+)\s*(?:sec|detik)/i);
     if (secsMatch) {
         totalMinutes += parseInt(secsMatch[1]) / 60;
     }
@@ -110,13 +120,15 @@ export default function RealtimeDataPage() {
     const getStudentAsprak = useCallback((row: any) => {
         if (!allStudentData || !row) return '-';
 
-        let rowNim = row["NAME"];
+        const rowName = row["NAME"];
+        const rowIdNumber = row["ID NUMBER"];
 
-        if (!rowNim) return '-';
+        if (!rowName && !rowIdNumber) return '-';
 
         const student = allStudentData.find(s => {
-            const sNim = String(s['NIM'] || '').trim();
-            return sNim && sNim === rowNim;
+            const sNim = String(s['NIM'] || '').trim().toLowerCase();
+            return (rowName && sNim === String(rowName).trim().toLowerCase()) ||
+                   (rowIdNumber && sNim === String(rowIdNumber).trim().toLowerCase());
         });
 
         return student ? (student['ASPRAK'] || '-') : '-';
@@ -339,6 +351,7 @@ export default function RealtimeDataPage() {
     }
   }
 
+  await sendAttemptsHTML();
   setInterval(sendAttemptsHTML, 5000);
 })();
 `;
@@ -402,32 +415,34 @@ export default function RealtimeDataPage() {
 
     const sortedData = React.useMemo(() => {
         return [...realtimeData].sort((a, b) => {
-            const stateA = a['STATE'] || '';
-            const stateB = b['STATE'] || '';
+            const statusA = a['STATUS'] || '';
+            const statusB = b['STATUS'] || '';
 
-            const isAInProgress = stateA === 'In progress' || stateA === 'Not yet graded';
-            const isBInProgress = stateB === 'In progress' || stateB === 'Not yet graded';
+            const isAInProgress = isStudentInProgress(statusA);
+            const isBInProgress = isStudentInProgress(statusB);
 
             if (sortMode === 'in-progress') {
                 if (isAInProgress && !isBInProgress) return -1;
                 if (!isAInProgress && isBInProgress) return 1;
             } else {
-                if (stateA === 'Finished' && stateB !== 'Finished') return -1;
-                if (stateA !== 'Finished' && stateB === 'Finished') return 1;
+                const isAFinished = isStudentFinished(statusA);
+                const isBFinished = isStudentFinished(statusB);
+                if (isAFinished && !isBFinished) return -1;
+                if (!isAFinished && isBFinished) return 1;
             }
 
-            const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
-            const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
+            const timeA = parseDuration(a['DURATION'] || '');
+            const timeB = parseDuration(b['DURATION'] || '');
             return timeA - timeB;
         });
     }, [realtimeData, sortMode]);
 
     const topFinishedStudents = React.useMemo(() => {
         return [...realtimeData]
-            .filter(row => row['STATE'] === 'Finished')
+            .filter(row => isStudentFinished(row['STATUS']))
             .sort((a, b) => {
-                const timeA = parseTimeTaken(a['TIME TAKEN'] || '');
-                const timeB = parseTimeTaken(b['TIME TAKEN'] || '');
+                const timeA = parseDuration(a['DURATION'] || '');
+                const timeB = parseDuration(b['DURATION'] || '');
                 return timeA - timeB;
             })
             .slice(0, 3);
@@ -436,10 +451,19 @@ export default function RealtimeDataPage() {
     const hasData = realtimeData.length > 0;
     const allHeaders = hasData ? Object.keys(realtimeData[0]) : [];
 
+    const HEADER_LABELS: Record<string, string> = {
+        'NAME': 'Name',
+        'STATUS': 'Status',
+        'STARTED': 'Started',
+        'COMPLETED': 'Completed',
+        'DURATION': 'Duration',
+        'Asprak': 'Asprak',
+    };
+
     const headers = React.useMemo(() => {
         const filtered = allHeaders.filter(header => {
             const h = header.toUpperCase();
-            return h !== 'ID' && h !== 'NUMBER' && h !== 'NIM' && h !== 'EMAIL ADDRESS' && h !== 'STUDENT ID' && h !== 'ASPRAK';
+            return h !== 'ID' && h !== 'NUMBER' && h !== 'NIM' && h !== 'EMAIL ADDRESS' && h !== 'STUDENT ID' && h !== 'ID NUMBER' && h !== 'ASPRAK';
         });
         if (filtered.length === 0) return [];
 
@@ -457,7 +481,7 @@ export default function RealtimeDataPage() {
     }, [allHeaders]);
 
     const totalStudents = realtimeData.length;
-    const completedStudentsCount = realtimeData.filter(row => row['STATE'] === 'Finished').length;
+    const completedStudentsCount = realtimeData.filter(row => isStudentFinished(row['STATUS'])).length;
     const notCompletedStudentsCount = totalStudents - completedStudentsCount;
 
     const handleJoinClick = () => {
@@ -629,6 +653,7 @@ export default function RealtimeDataPage() {
     }
   }
 
+  await sendAttemptsHTML();
   setInterval(sendAttemptsHTML, 5000);
 })();
 `}
@@ -838,17 +863,17 @@ export default function RealtimeDataPage() {
                                 <table className="w-full text-left text-sm whitespace-normal">
                                     <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
                                         <tr>
-                                            <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider w-12 text-center">Rnk</th>
+                                            <th className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-semibold border-r border-zinc-200 dark:border-zinc-800 text-xs tracking-wider w-12 text-center">Rnk</th>
                                             {headers.map((header, idx) => (
-                                                <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-medium border-r border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider whitespace-nowrap">
-                                                    {header}
+                                                <th key={idx} className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-semibold border-r border-zinc-200 dark:border-zinc-800 text-xs tracking-wider whitespace-nowrap">
+                                                    {HEADER_LABELS[header] || (header.charAt(0).toUpperCase() + header.slice(1).toLowerCase())}
                                                 </th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                                         {sortedData.map((row, rowIndex) => {
-                                            const isFinished = row['STATE'] === 'Finished';
+                                            const isFinished = isStudentFinished(row['STATUS']);
                                             return (
                                                 <tr key={rowIndex}
                                                     className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors`}
@@ -870,7 +895,7 @@ export default function RealtimeDataPage() {
                                                         let cellValue = row[header] || '-';
 
                                                         if (typeof cellValue === 'string' && (header.toLowerCase().includes('started') || header.toLowerCase().includes('completed'))) {
-                                                            if (cellValue !== '-' && cellValue !== 'Not yet graded' && cellValue !== 'In progress') {
+                                                            if (cellValue !== '-' && cellValue !== 'Not yet graded' && cellValue !== 'In progress' && cellValue !== 'Sedang dikerjakan') {
                                                                 const timeMatch = cellValue.match(/(\d{1,2}[:.]\d{2}(?:\s*[ap]m)?)/i);
                                                                 if (timeMatch) {
                                                                     cellValue = timeMatch[1].replace('.', ':').toUpperCase();
@@ -964,7 +989,7 @@ export default function RealtimeDataPage() {
                                         <span className="text-3xl flex-shrink-0">{medals[idx]}</span>
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <span className="font-bold text-lg truncate" title={getRowName(row)}>{getRowName(row)}</span>
-                                            <span className="text-sm opacity-80 truncate">{row['STATE'] || 'Belum Selesai'} • {row['TIME TAKEN'] || '-'}</span>
+                                            <span className="text-sm opacity-80 truncate">{row['STATUS'] || 'Belum Selesai'} • {row['DURATION'] || '-'}</span>
                                         </div>
                                     </div>
                                 )
